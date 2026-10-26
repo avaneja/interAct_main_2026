@@ -475,6 +475,212 @@ This repository is intended for a four-person academic capstone. Contributors sh
 
 **Current state:** Specification finalized; implementation and benchmark results pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
+
+
+## Custom AI Interviewer Studio
+
+### Overview
+
+InterAct allows users to personalize their interview experience by selecting a predefined AI interviewer, creating a custom interviewer through natural-language prompts, or uploading an image as a visual reference.
+
+The Custom AI Interviewer Studio makes the interviewer a configurable part of the product while keeping its visual appearance independent of the underlying interview intelligence.
+
+### Core Features
+
+#### 1. Default Interviewer Library
+- Provide a curated collection of predefined interviewer avatars.
+- Support different appearances, visual styles, and professional personalities.
+- Allow users to preview and select an interviewer before starting an interview.
+- Allow users to save a preferred avatar as their default interviewer.
+
+#### 2. Prompt-to-Avatar Generation
+- Users describe their desired interviewer through a chat interface.
+- The backend converts the description into a structured image-generation prompt.
+- Users can specify appearance, clothing, expression, visual style, and background.
+- A configured image-generation provider generates the avatar.
+- Users can refine the description, regenerate the avatar, and save the final result.
+
+**Example prompt:**
+
+> Create a friendly, confident interviewer wearing a navy-blue suit, with a calm and professional expression. Use realistic proportions, soft studio lighting, a clean background, and a centered head-and-shoulders composition.
+
+#### 3. Image-Based Avatar Creation
+- Users can upload an image of a person as a visual reference.
+- The system validates the image format, size, and content before processing.
+- A compatible image-generation provider uses the uploaded image as a reference to create an interviewer portrait.
+- Users can preview and save the resulting avatar.
+- Appropriate permission must be obtained before using a person's likeness.
+
+#### 4. Avatar Library and Reuse
+- Store custom avatars in the user's personal library.
+- Allow users to view, select, rename, and delete saved avatars.
+- Preserve avatar metadata and image references across sessions.
+- Allow the selected avatar to be reused across multiple interviews.
+
+### User Workflow
+
+1. The user opens Interviewer Studio.
+2. The user chooses a default avatar, describes a custom interviewer, or uploads a reference image.
+3. InterAct validates the input and prepares the generation request.
+4. The backend sends the request to the configured image-generation provider.
+5. The user receives a preview and can regenerate or refine the result.
+6. The user saves the avatar to their personal library.
+7. The selected avatar is attached to the interview configuration.
+8. The interview engine conducts the interview independently of the avatar generation process.
+
+### Technical Architecture
+
+The feature follows the existing modular-monolith architecture.
+
+| Component | Responsibility |
+|---|---|
+| React + TypeScript | Avatar creation chat, image upload, preview, gallery, and selection |
+| FastAPI | Input validation, authentication, generation lifecycle, and avatar management |
+| Prompt Preparation Service | Converts user descriptions into structured image prompts |
+| Image Provider Adapter | Integrates with a configured image-generation API |
+| PostgreSQL | Stores avatar metadata, generation jobs, ownership, and status |
+| Object Storage | Stores generated images and uploaded reference images |
+| Interview Engine | Uses the selected avatar without coupling avatar generation to interview logic |
+
+**Important:** Image generation must be integrated explicitly. The system must not assume that a provider is configured or return a successful result when the provider is unavailable.
+
+### API Design
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/avatars/generations` | Start avatar generation from a text description |
+| `GET` | `/api/v1/avatars/generations/{id}` | Retrieve generation status |
+| `POST` | `/api/v1/avatars` | Save a generated avatar |
+| `GET` | `/api/v1/avatars` | List the authenticated user's avatars |
+| `GET` | `/api/v1/avatars/{id}` | Retrieve avatar metadata |
+| `DELETE` | `/api/v1/avatars/{id}` | Delete an owned avatar and associated assets |
+| `POST` | `/api/v1/avatars/uploads` | Upload a reference image |
+
+The API must enforce authentication, ownership checks, input validation, and appropriate rate limits.
+
+### Data Model
+
+#### Avatar
+- `id`
+- `user_id`
+- `name`
+- `description`
+- `visual_style`
+- `source_type` — `preset`, `text_prompt`, or `image_upload`
+- `status`
+- `created_at`
+- `updated_at`
+
+#### AvatarGeneration
+- `id`
+- `user_id`
+- `avatar_id`
+- `prompt_version`
+- `provider`
+- `provider_job_id`
+- `status`
+- `error_code`
+- `created_at`
+- `completed_at`
+
+#### AvatarAsset
+- `id`
+- `avatar_id`
+- `storage_key`
+- `mime_type`
+- `width`
+- `height`
+- `created_at`
+
+These are proposed entities to be implemented using the project's existing PostgreSQL and SQLAlchemy conventions.
+
+### Generation Lifecycle
+
+The avatar generation lifecycle follows these states:
+
+`QUEUED → PROCESSING → COMPLETED`
+
+If generation fails, the status becomes `FAILED`, and the frontend displays an actionable error.
+
+Long-running generation requests should use background processing and a status endpoint rather than blocking an HTTP request indefinitely.
+
+The prompt preparation service should use a versioned template to maintain consistent composition, framing, lighting, and visual quality. Provider-specific logic must remain isolated behind an adapter to avoid vendor lock-in.
+
+### Frontend Integration
+
+Suggested frontend structure:
+
+```text
+frontend/src/
+├── pages/
+│   └── InterviewerStudio.tsx
+├── components/
+│   └── avatars/
+│       ├── AvatarCreationChat.tsx
+│       ├── AvatarPreview.tsx
+│       ├── AvatarCard.tsx
+│       ├── AvatarGallery.tsx
+│       └── AvatarGenerationStatus.tsx
+└── api/
+    └── avatars.ts
+```
+
+The frontend should support:
+- Submitting an interviewer description.
+- Uploading a reference image.
+- Displaying generation progress and errors.
+- Previewing and regenerating avatars.
+- Saving and selecting avatars.
+- Displaying saved avatars in the personal library.
+
+### Security and Privacy
+
+- Store API keys in server-side environment variables or a secrets manager.
+- Never expose image-provider credentials to the frontend.
+- Store images in private object storage and use authorized access or short-lived signed URLs.
+- Validate file types, sizes, and actual image content.
+- Enforce per-user access controls and generation rate limits.
+- Apply retention and deletion policies to uploaded images and generated assets.
+- Require appropriate permission for the use of a person's likeness.
+- Handle provider errors and retries without creating inconsistent database records.
+
+### Implementation Scope
+
+#### MVP
+- Curated default interviewer library.
+- Prompt-based avatar generation.
+- Avatar preview and regeneration.
+- Save, select, and reuse custom avatars.
+- Persistent metadata and secure image storage.
+- Integration with the existing interview interface.
+- Graceful handling of unconfigured providers and failed requests.
+
+#### Future Enhancements
+- Image-reference-based avatar generation.
+- Advanced appearance and outfit customization.
+- Multiple avatar variations per prompt.
+- Voice selection and synchronization.
+- Facial animation, lip synchronization, and real-time talking avatars.
+
+### Acceptance Criteria
+
+- [ ] Users can select a predefined avatar or request a custom one.
+- [ ] A configured provider generates real images from validated prompts.
+- [ ] Users can preview, refine, save, and reuse custom avatars.
+- [ ] Saved avatar metadata persists across sessions.
+- [ ] Users cannot access or modify another user's private avatars.
+- [ ] Provider failures produce clear error states.
+- [ ] The selected avatar integrates with the interview UI without modifying the core interview engine.
+- [ ] Uploaded and generated assets follow appropriate security and deletion policies.
+
+### Design Principle
+
+**The avatar defines how the interviewer looks; the interview engine defines how the interviewer thinks, asks questions, follows up, and evaluates answers.**
+
+These systems must remain independently configurable.
+
 ## License
 
 To be decided by the team before public release.
+
+
