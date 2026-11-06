@@ -13,6 +13,7 @@ dependencies = [
     "pydantic~=2.14",
     "pydantic-settings~=2.16",
     "sqlalchemy~=2.1.8",
+    "psycopg[binary]~=3.3",
     "alembic~=1.20",
 ]
 
@@ -28,3 +29,6 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error"]
+markers = [
+    "postgres: needs the PostgreSQL server from DATABASE_URL; skipped when it is not running",
+]
