@@ -4,10 +4,11 @@
 
 > **Project status:** Planned capstone — this README is a proposed technical specification, not documentation of an already implemented system.
 >
-> **Team:** 4 developers | **Target timeline:** 4 weeks | **Focus:** Applied AI/ML research + full-stack software engineering
+> **Team:** 4 developers | **MVP timeline:** 15 days (primary developer, ~2–4 h/day) | **Focus:** Applied AI/ML research + full-stack software engineering
+>
+> The MVP scope is defined in [§9 — 15-day MVP roadmap](#9-15-day-mvp-roadmap). Anything not listed there is a future extension.
 
 ## 1. Product overview
-x
 InterAct allows a user to prepare for an interview in **exactly two ways**:
 
 - **Model A — Topic-Based Interview:** The user describes what they want to be interviewed on in natural language. An LLM conducts a short **pre-interview clarification conversation** to establish the topic boundaries, goals, experience level, and relevant subtopics.
@@ -73,7 +74,7 @@ flowchart TD
 
 ### 2.2 Model B — Document-based interview
 
-**Supported initial formats:** PDF, DOCX, PPTX, TXT. For a four-week MVP, prioritize text-based PDFs and TXT, then add DOCX/PPTX if time allows. Scanned PDFs require OCR and may be rejected in the MVP with a clear message.
+**Supported formats:** The MVP supports text-based PDF and TXT. DOCX and PPTX are future extensions. Scanned PDFs require OCR and are rejected in the MVP with a clear message.
 
 **Sequence:**
 
@@ -89,6 +90,18 @@ flowchart TD
 10. Interview begins and final feedback distinguishes **document-supported claims** from outside knowledge.
 
 **Grounding requirements:** A generated document-based question must be traceable to a source chunk. Retain file ID and page/slide/section metadata where available. Do not invent citations. If source content is missing or insufficient, state the limitation and ask the user to broaden scope or upload a better source.
+
+### 2.2.1 Document grounding pipeline (MVP)
+
+Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP uses a topic map plus lexical retrieval instead of a vector database.
+
+1. **Page-aware chunking:** Extract text per page and split into chunks of roughly 400–800 tokens with small overlap. Each chunk stores `document_id`, `chunk_index`, and `page`.
+2. **Topic map at ingestion:** The LLM groups chunks into topics (`topic → [chunk_ids]`). The user reviews and selects topics. Questions for a competency use its mapped chunks, so every citation comes from a known chunk.
+3. **BM25 fallback retrieval:** For follow-ups or focus areas not covered by the map, rank the document's chunks with BM25 in application code. This is database-independent; pgvector/embeddings are a future option if lexical retrieval proves insufficient.
+4. **Supporting-quote verification:** The generator returns a `supporting_quote` per question; the backend checks that it is a normalized substring of the cited chunk and regenerates or flags the question otherwise. The pass rate is reported as a grounding metric.
+5. **Grounded answer key:** When a document question is generated, a short answer key is derived from the same chunks. The evaluator scores against it, which lets the report separate document-supported points from outside knowledge.
+6. **Small-document shortcut:** If the selected scope is small enough to fit in the model context (≈15k tokens), scope extraction reads it whole instead of retrieving.
+7. **Prompt-injection handling:** Document text is passed only inside delimited data blocks, never as instructions, and all LLM outputs are validated against strict schemas.
 
 ### 2.3 Shared interview configuration (both models)
 
@@ -140,7 +153,7 @@ flowchart TD
 
 ## 3. Proposed technical architecture
 
-**Approach:** Modular monolith. A React frontend communicates with one FastAPI backend. The backend contains separate modules for ingestion, preparation, orchestration, generation, scoring, and reporting. PostgreSQL persists sessions and experiments. Avoid microservices and unnecessary multi-agent complexity during the four-week MVP.
+**Approach:** Modular monolith. A React frontend communicates with one FastAPI backend. The backend contains separate modules for ingestion, preparation, orchestration, generation, scoring, and reporting. PostgreSQL persists sessions and experiments. Avoid microservices and unnecessary multi-agent complexity during the MVP.
 
 ```mermaid
 flowchart TB
@@ -171,15 +184,35 @@ flowchart TB
 
 | Component | Technology | Responsibility |
 |---|---|---|
-| Frontend | React + TypeScript + Tailwind CSS | Preparation chat, upload UI, configuration, interview, report |
-| Backend | Python + FastAPI + Pydantic | API endpoints, validation, session lifecycle |
-| Orchestration | Explicit Python state machine; optional LangGraph | Deterministic state transitions and conditional follow-ups |
-| LLM | One hosted LLM behind an adapter | Clarification, extraction, generation, scoring, feedback |
-| Database | PostgreSQL + SQLAlchemy + Alembic | Persistent session, answers, scores, research metadata |
-| Document parsing | PyMuPDF/pypdf, python-docx, python-pptx | Source extraction with metadata |
-| Retrieval | Initially lexical/full-text search; optional pgvector | Retrieve relevant document chunks |
-| Tests | pytest, frontend tests, API integration tests | Reliability and regression coverage |
-| Deployment | Docker Compose + suitable cloud hosting | Reproducible deployment |
+| Frontend | React + TypeScript + Vite + Tailwind CSS | Preparation chat, upload UI, configuration, interview, report |
+| Backend | Python 3.13 + FastAPI + Pydantic | API endpoints, validation, session lifecycle |
+| Orchestration | Explicit Python state machine (no agent framework) | Deterministic state transitions and conditional follow-ups |
+| LLM | OpenAI-compatible adapter; local and hosted modes | Clarification, extraction, generation, scoring, feedback |
+| Authentication | Google and GitHub OAuth (Authlib) + secure HTTP-only session cookie | Sign-in, resource ownership |
+| Database | PostgreSQL + SQLAlchemy + Alembic | Persistent users, sessions, answers, scores, research metadata |
+| Document parsing | PyMuPDF (PDF), plain text (TXT) | Source extraction with page metadata |
+| Retrieval | Topic map + BM25 in application code; optional pgvector later | Retrieve relevant document chunks |
+| Tests | pytest (with a deterministic fake LLM), API integration tests, frontend build/lint | Reliability and regression coverage |
+| Deployment | Free-tier hosting + managed PostgreSQL (e.g., Neon) | Hosted demo |
+
+### LLM modes
+
+Both modes use the same adapter because Ollama and common hosted providers expose an OpenAI-compatible API. Switching is configuration only (`LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`).
+
+| Mode | Provider | Used for |
+|---|---|---|
+| **Local** | Ollama with a ≤8B instruct model (e.g., Qwen3 8B, Llama 3.1 8B) | Development, offline use, reproducible experiments; no cost and no data leaves the machine |
+| **Hosted** | A free-tier OpenAI-compatible provider (e.g., Groq, Gemini, OpenRouter) | The deployed demo, where a local model cannot run |
+
+The model is chosen by measuring structured-output validity and grading quality on InterAct's own tasks. Free-tier limits change, so they are re-checked before the demo. Automated tests use a deterministic fake provider and never call a real model.
+
+### Authentication
+
+- Users sign in with Google or GitHub. No passwords are stored.
+- The backend completes the OAuth flow and issues an HTTP-only, signed session cookie; no tokens are stored in frontend code.
+- Only minimal profile data is stored: provider, provider user ID, email, display name.
+- Every session, document, job, and avatar row has an `owner_id`, and all endpoints check ownership.
+- OAuth client secrets live only in server-side environment variables.
 
 ### Why use a single shared interview engine?
 
@@ -206,7 +239,7 @@ The following are **illustrative proposed schemas**, not implemented interfaces.
 }
 ```
 
-For Model B, `input_model` is `DOCUMENT` and `document_id` identifies the uploaded source.
+For Model B, `input_model` is `DOCUMENT`, `document_id` identifies the uploaded source, and a `selected_topic_ids` list records the topics the user chose from the topic map.
 
 ### InterviewConfig
 
@@ -216,11 +249,14 @@ For Model B, `input_model` is `DOCUMENT` and `document_id` identifies the upload
   "difficulty": "intermediate",
   "question_count": 10,
   "adaptive": true,
-  "feedback_timing": "END"
+  "feedback_timing": "END",
+  "avatar_key": "preset-01"
 }
 ```
 
 Suggested question type enum: `DIRECT`, `CONCEPTUAL`, `CASE_BASED`, `SCENARIO_BASED`, `APPLICATION`, `MIXED`.
+
+`avatar_key` names a preset interviewer and defaults to the user's `default_avatar_key`. The interview engine never reads it; only the UI uses it.
 
 ### GeneratedQuestion
 
@@ -234,9 +270,14 @@ Suggested question type enum: `DIRECT`, `CONCEPTUAL`, `CASE_BASED`, `SCENARIO_BA
   "difficulty": "intermediate",
   "prompt": "A classifier has 98% accuracy but detects few positive cases. How would you evaluate it?",
   "rubric_id": "uuid",
-  "source_chunk_ids": []
+  "source_chunk_ids": [],
+  "supporting_quote": null,
+  "answer_key": null,
+  "grounding_status": "NOT_APPLICABLE"
 }
 ```
+
+`supporting_quote`, `answer_key`, and `grounding_status` apply to Model B. `grounding_status` is `VERIFIED`, `FLAGGED`, or `NOT_APPLICABLE`. The API must not return `answer_key` or `supporting_quote` until the question has been answered, because either one can reveal the answer.
 
 ### AnswerEvaluation
 
@@ -287,6 +328,7 @@ stateDiagram-v2
 - Answer submission should be idempotent to avoid duplicate questions or scores.
 - Persist state before acknowledging completed operations.
 - On LLM errors, retry safely within limits; do not silently fabricate scores.
+- If evaluation still fails after retries, keep the saved answer and leave the session in `EVALUATING`. Resubmitting the same answer retries evaluation without creating a duplicate; submitting different text for that question is rejected.
 - Keep raw model output separate from validated structured data.
 - Uploaded document text and user answers are untrusted inputs; they must not override system instructions or rubric rules.
 
@@ -309,20 +351,31 @@ Keep **fixed-question mode** available internally for controlled research compar
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `POST` | `/api/sessions` | Create draft session for `TOPIC` or `DOCUMENT` |
-| `POST` | `/api/sessions/{id}/prepare/message` | Exchange Model A clarification messages |
-| `POST` | `/api/documents` | Upload and validate a document |
-| `GET` | `/api/documents/{id}/summary` | Return extracted topics and source summary |
-| `PUT` | `/api/sessions/{id}/context` | Update/confirm prepared scope |
-| `PUT` | `/api/sessions/{id}/config` | Set common question style, difficulty, and count |
-| `POST` | `/api/sessions/{id}/start` | Confirm and begin interview |
-| `GET` | `/api/sessions/{id}/current-question` | Fetch active question |
-| `POST` | `/api/sessions/{id}/answers` | Submit answer and trigger evaluation |
-| `POST` | `/api/sessions/{id}/finish` | End session and generate report |
-| `GET` | `/api/sessions/{id}/report` | Fetch report |
-| `GET` | `/api/sessions` | List user's interview history |
+| `POST` | `/api/v1/sessions` | Create draft session for `TOPIC` or `DOCUMENT` |
+| `POST` | `/api/v1/sessions/{id}/prepare/message` | Exchange Model A clarification messages |
+| `POST` | `/api/v1/documents` | Upload and validate a document |
+| `GET` | `/api/v1/documents/{id}/summary` | Return extracted topics and source summary |
+| `PUT` | `/api/v1/sessions/{id}/context` | Update/confirm prepared scope |
+| `PUT` | `/api/v1/sessions/{id}/config` | Set common question style, difficulty, and count |
+| `GET` | `/api/v1/sessions/{id}` | Fetch a session's state, context, and config for plan preview and resume |
+| `POST` | `/api/v1/sessions/{id}/confirm` | Confirm the previewed plan; move `CONFIGURING` to `READY` |
+| `POST` | `/api/v1/sessions/{id}/start` | Begin the interview; move `READY` to `IN_PROGRESS` |
+| `GET` | `/api/v1/sessions/{id}/current-question` | Fetch active question |
+| `POST` | `/api/v1/sessions/{id}/answers` | Submit answer and trigger evaluation |
+| `POST` | `/api/v1/sessions/{id}/pause` | Move `IN_PROGRESS` to `PAUSED` |
+| `POST` | `/api/v1/sessions/{id}/resume` | Move `PAUSED` to `IN_PROGRESS` and keep the active question |
+| `POST` | `/api/v1/sessions/{id}/finish` | End session and generate report |
+| `GET` | `/api/v1/sessions/{id}/report` | Fetch report |
+| `GET` | `/api/v1/sessions` | List user's interview history |
+| `GET` | `/api/v1/jobs/{id}` | Fetch the status and result of a background job |
+| `GET` | `/api/v1/avatars/presets` | List preset interviewer avatars |
+| `PUT` | `/api/v1/auth/me/default-avatar` | Save the user's default preset avatar |
+| `GET` | `/api/v1/auth/{provider}/login` | Start Google or GitHub sign-in |
+| `GET` | `/api/v1/auth/{provider}/callback` | Complete OAuth and set session cookie |
+| `GET` | `/api/v1/auth/me` | Return the signed-in user |
+| `POST` | `/api/v1/auth/logout` | Clear the session cookie |
 
-All session/document endpoints must authorize access to the resource owner. For long LLM operations, return a job/status identifier or use an appropriate asynchronous request pattern rather than blocking indefinitely.
+All session/document/job endpoints must authorize access to the resource owner. Long LLM operations return a job ID that the client polls at `/api/v1/jobs/{id}`, rather than blocking indefinitely.
 
 ---
 
@@ -330,16 +383,28 @@ All session/document endpoints must authorize access to the resource owner. For 
 
 | Entity | Important fields |
 |---|---|
-| `users` | id, authentication identifier, created_at |
-| `documents` | id, owner_id, filename, storage_key, status, created_at |
+| `users` | id, auth_provider (`google`/`github`), provider_user_id, email, display_name, default_avatar_key, created_at |
+| `documents` | id, owner_id, filename, storage_key, status, summary_json, created_at |
 | `document_chunks` | id, document_id, text, page/slide/section reference, chunk_index |
-| `sessions` | id, user_id, input_model, state, context_json, config_json, created_at |
+| `document_topics` | id, document_id, name, summary, chunk_ids |
+| `sessions` | id, owner_id, input_model, state, context_json, config_json, created_at |
 | `preparation_messages` | id, session_id, role, content, created_at |
-| `questions` | id, session_id, sequence, type, competency, prompt, rubric_id, source_refs |
-| `answers` | id, question_id, session_id, text, submitted_at |
-| `evaluations` | id, answer_id, scores_json, evidence_json, evaluator_version |
+| `rubrics` | id, version, name, criteria_json, max_score, created_at |
+| `questions` | id, session_id, sequence, type, competency, prompt, rubric_id, source_chunk_ids, supporting_quote, answer_key_json, grounding_status |
+| `answers` | id, question_id (unique), session_id, text, submitted_at |
+| `evaluations` | id, answer_id (unique), scores_json, evidence_json, evaluator_version |
 | `reports` | id, session_id, summary_json, generated_at |
+| `jobs` | id, owner_id, kind, status, session_id, document_id, result_json, error_code, created_at, completed_at |
+| `llm_calls` | id, session_id, document_id, purpose, model, prompt_version, raw_output, validation_status, created_at |
 | `experiment_runs` | id, model_version, prompt_version, rubric_version, dataset_version, metrics_json |
+
+**Ownership:** `owner_id` always references `users.id`. Rows without their own `owner_id` inherit ownership through their parent session or document. Rubrics are shared and have no owner; a rubric version is never edited once a question references it, so fixed and adaptive runs stay comparable.
+
+**Jobs:** `status` follows `QUEUED → PROCESSING → COMPLETED`, or `FAILED` with an `error_code`.
+
+**Raw LLM output:** `llm_calls` keeps the unmodified model response, separate from the validated data in `questions`, `evaluations`, and `reports`.
+
+**Preset avatars:** Presets are a static list in the application, identified by a key, so the MVP needs no avatar tables. `users.default_avatar_key` stores the saved choice.
 
 Store minimal personal information. Set retention/deletion rules for uploaded files and answers. Research datasets should be synthetic or explicitly consented and de-identified where appropriate.
 
@@ -365,16 +430,22 @@ Do not claim that the adaptive system is superior until experimental results sup
 
 ---
 
-## 9. Four-week implementation roadmap
+## 9. 15-day MVP roadmap
 
-| Week | Focus | Exit criteria |
+Budget: about 30–60 hours. Each milestone ends with passing tests and a reviewable pull request.
+
+| # | Milestone | Exit criteria |
 |---|---|---|
-| **1** | Set up repo/API/database; build topic preparation conversation; basic document ingestion; shared config | Both models produce a confirmed interview context and configuration |
-| **2** | Implement question types, fixed and adaptive engine, answer evaluation, persistence, report UI | Full end-to-end interview works in both models |
-| **3** | Improve document grounding; human annotation; benchmark fixed vs adaptive; test style compliance | Reproducible initial evaluation results and error analysis |
-| **4** | Reliability/security tests, deployment, final experiments, technical report, README and demo | Deployed MVP with documented research results |
+| **M0** | Scope and README update | Spec matches the realistic MVP |
+| **M1** | Backend skeleton, PostgreSQL models with `owner_id`, shared interview state machine on a fake LLM | A full session runs through the API in tests |
+| **M2** | OpenAI-compatible LLM adapter (Ollama), style-aware question generation, rubric evaluator, local model comparison | Real questions and validated evaluations from a local model |
+| **M3** | Frontend flow: topic input → configuration → interview → report | End-to-end interview in the browser (Model A, no clarification yet) |
+| **M4** | Google and GitHub sign-in | Only the owner can access their sessions |
+| **M5** | Model A clarification conversation | Skippable 2–4 question clarification produces a confirmed context |
+| **M6** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
+| **M7** | Adaptive follow-ups, preset avatars, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
 
-**Scope protection:** Text-only interview is the MVP. Voice, video, emotion detection, arbitrary code execution, and custom model training are out of scope for the four-week release.
+**Scope protection:** Text-only interview is the MVP. Voice, video, emotion detection, arbitrary code execution, custom model training, DOCX/PPTX parsing, and AI avatar generation are out of scope for the MVP. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
 
 ### Team allocation
 
@@ -473,8 +544,224 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** Specification finalized; implementation and benchmark results pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** MVP scope agreed (see §9); frontend scaffold (React + TypeScript + Vite + Tailwind CSS) exists; backend, LLM integration, and benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+
+
+
+## Custom AI Interviewer Studio
+
+### Overview
+
+InterAct allows users to personalize their interview experience by selecting a predefined AI interviewer, creating a custom interviewer through natural-language prompts, or uploading an image as a visual reference.
+
+The Custom AI Interviewer Studio makes the interviewer a configurable part of the product while keeping its visual appearance independent of the underlying interview intelligence.
+
+### Core Features
+
+#### 1. Default Interviewer Library
+- Provide a curated collection of predefined interviewer avatars.
+- Support different appearances, visual styles, and professional personalities.
+- Allow users to preview and select an interviewer before starting an interview.
+- Allow users to save a preferred avatar as their default interviewer.
+
+#### 2. Prompt-to-Avatar Generation
+- Users describe their desired interviewer through a chat interface.
+- The backend converts the description into a structured image-generation prompt.
+- Users can specify appearance, clothing, expression, visual style, and background.
+- A configured image-generation provider generates the avatar.
+- Users can refine the description, regenerate the avatar, and save the final result.
+
+**Example prompt:**
+
+> Create a friendly, confident interviewer wearing a navy-blue suit, with a calm and professional expression. Use realistic proportions, soft studio lighting, a clean background, and a centered head-and-shoulders composition.
+
+#### 3. Image-Based Avatar Creation
+- Users can upload an image of a person as a visual reference.
+- The system validates the image format, size, and content before processing.
+- A compatible image-generation provider uses the uploaded image as a reference to create an interviewer portrait.
+- Users can preview and save the resulting avatar.
+- Appropriate permission must be obtained before using a person's likeness.
+
+#### 4. Avatar Library and Reuse
+- Store custom avatars in the user's personal library.
+- Allow users to view, select, rename, and delete saved avatars.
+- Preserve avatar metadata and image references across sessions.
+- Allow the selected avatar to be reused across multiple interviews.
+
+### User Workflow
+
+1. The user opens Interviewer Studio.
+2. The user chooses a default avatar, describes a custom interviewer, or uploads a reference image.
+3. InterAct validates the input and prepares the generation request.
+4. The backend sends the request to the configured image-generation provider.
+5. The user receives a preview and can regenerate or refine the result.
+6. The user saves the avatar to their personal library.
+7. The selected avatar is attached to the interview configuration.
+8. The interview engine conducts the interview independently of the avatar generation process.
+
+### Technical Architecture
+
+The feature follows the existing modular-monolith architecture.
+
+| Component | Responsibility |
+|---|---|
+| React + TypeScript | Avatar creation chat, image upload, preview, gallery, and selection |
+| FastAPI | Input validation, authentication, generation lifecycle, and avatar management |
+| Prompt Preparation Service | Converts user descriptions into structured image prompts |
+| Image Provider Adapter | Integrates with a configured image-generation API |
+| PostgreSQL | Stores avatar metadata, generation jobs, ownership, and status |
+| Object Storage | Stores generated images and uploaded reference images |
+| Interview Engine | Uses the selected avatar without coupling avatar generation to interview logic |
+
+**Important:** Image generation must be integrated explicitly. The system must not assume that a provider is configured or return a successful result when the provider is unavailable.
+
+### API Design
+
+These endpoints support the future custom avatars. The MVP uses only the preset endpoints in §6.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/api/v1/avatars/generations` | Start avatar generation from a text description |
+| `GET` | `/api/v1/avatars/generations/{id}` | Retrieve generation status |
+| `POST` | `/api/v1/avatars` | Save a generated avatar |
+| `GET` | `/api/v1/avatars` | List the authenticated user's avatars |
+| `GET` | `/api/v1/avatars/{id}` | Retrieve avatar metadata |
+| `DELETE` | `/api/v1/avatars/{id}` | Delete an owned avatar and associated assets |
+| `POST` | `/api/v1/avatars/uploads` | Upload a reference image |
+
+The API must enforce authentication, ownership checks, input validation, and appropriate rate limits.
+
+### Data Model
+
+These tables support the future custom avatars. MVP presets are static and use none of them (see §7).
+
+#### Avatar
+- `id`
+- `owner_id`
+- `name`
+- `description`
+- `visual_style`
+- `source_type` — `text_prompt` or `image_upload`
+- `status`
+- `created_at`
+- `updated_at`
+
+#### AvatarGeneration
+- `id`
+- `owner_id`
+- `avatar_id`
+- `prompt_version`
+- `provider`
+- `provider_job_id`
+- `status`
+- `error_code`
+- `created_at`
+- `completed_at`
+
+#### AvatarAsset
+- `id`
+- `avatar_id`
+- `storage_key`
+- `mime_type`
+- `width`
+- `height`
+- `created_at`
+
+These are proposed entities to be implemented using the project's existing PostgreSQL and SQLAlchemy conventions.
+
+### Generation Lifecycle
+
+The avatar generation lifecycle follows these states:
+
+`QUEUED → PROCESSING → COMPLETED`
+
+If generation fails, the status becomes `FAILED`, and the frontend displays an actionable error.
+
+Long-running generation requests should use background processing and a status endpoint rather than blocking an HTTP request indefinitely.
+
+The prompt preparation service should use a versioned template to maintain consistent composition, framing, lighting, and visual quality. Provider-specific logic must remain isolated behind an adapter to avoid vendor lock-in.
+
+### Frontend Integration
+
+Suggested frontend structure:
+
+```text
+frontend/src/
+├── pages/
+│   └── InterviewerStudio.tsx
+├── components/
+│   └── avatars/
+│       ├── AvatarCreationChat.tsx
+│       ├── AvatarPreview.tsx
+│       ├── AvatarCard.tsx
+│       ├── AvatarGallery.tsx
+│       └── AvatarGenerationStatus.tsx
+└── api/
+    └── avatars.ts
+```
+
+The frontend should support:
+- Submitting an interviewer description.
+- Uploading a reference image.
+- Displaying generation progress and errors.
+- Previewing and regenerating avatars.
+- Saving and selecting avatars.
+- Displaying saved avatars in the personal library.
+
+### Security and Privacy
+
+- Store API keys in server-side environment variables or a secrets manager.
+- Never expose image-provider credentials to the frontend.
+- Store images in private object storage and use authorized access or short-lived signed URLs.
+- Validate file types, sizes, and actual image content.
+- Enforce per-user access controls and generation rate limits.
+- Apply retention and deletion policies to uploaded images and generated assets.
+- Require appropriate permission for the use of a person's likeness.
+- Handle provider errors and retries without creating inconsistent database records.
+
+### Implementation Scope
+
+#### MVP
+- Curated default interviewer library (static preset images; no image generation).
+- Select a preset avatar for an interview and save it as the user's default.
+- Integration with the existing interview interface.
+
+#### Future Enhancements
+- Prompt-based avatar generation through an image-provider adapter.
+- Avatar preview and regeneration.
+- Save, select, and reuse custom avatars with persistent metadata and secure image storage.
+- Graceful handling of unconfigured providers and failed requests.
+- Image-reference-based avatar generation.
+- Advanced appearance and outfit customization.
+- Multiple avatar variations per prompt.
+- Voice selection and synchronization.
+- Facial animation, lip synchronization, and real-time talking avatars.
+
+### Acceptance Criteria
+
+MVP:
+
+- [ ] Users can select a predefined avatar and save it as their default.
+- [ ] The selected avatar integrates with the interview UI without modifying the core interview engine.
+
+Future (custom avatars):
+
+- [ ] Users can request a custom avatar.
+- [ ] A configured provider generates real images from validated prompts.
+- [ ] Users can preview, refine, save, and reuse custom avatars.
+- [ ] Saved avatar metadata persists across sessions.
+- [ ] Users cannot access or modify another user's private avatars.
+- [ ] Provider failures produce clear error states.
+- [ ] Uploaded and generated assets follow appropriate security and deletion policies.
+
+### Design Principle
+
+**The avatar defines how the interviewer looks; the interview engine defines how the interviewer thinks, asks questions, follows up, and evaluates answers.**
+
+These systems must remain independently configurable.
 
 ## License
 
 To be decided by the team before public release.
+
+
