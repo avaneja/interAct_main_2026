@@ -6,7 +6,10 @@ Requires Python 3.13. Run these commands from `backend/`.
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+cp .env.example .env
 ```
+
+Settings are read from environment variables first, then from `backend/.env`. `.env.example` lists every setting with a working local default. A misspelled key in `.env` stops the app at startup.
 
 Run the tests:
 
