@@ -100,6 +100,21 @@ def test_migration_creates_exactly_the_model_schema(db_engine):
     assert differences == []
 
 
+def test_migrated_database_allows_only_known_auth_providers(db_engine):
+    # compare_metadata does not compare CHECK constraints, so test them directly.
+    insert = text(
+        "INSERT INTO users (id, auth_provider, provider_user_id, created_at) "
+        "VALUES (:id, :provider, :id, CURRENT_TIMESTAMP)"
+    )
+    with db_engine.begin() as connection:
+        command.upgrade(alembic_config(connection), "head")
+        for provider in ("google", "github", "dev"):
+            connection.execute(insert, {"id": provider, "provider": provider})
+
+        with pytest.raises(IntegrityError):
+            connection.execute(insert, {"id": "apple", "provider": "apple"})
+
+
 def test_migration_downgrade_removes_every_table(db_engine):
     with db_engine.begin() as connection:
         config = alembic_config(connection)

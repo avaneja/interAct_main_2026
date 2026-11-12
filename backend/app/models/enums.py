@@ -4,6 +4,7 @@ from enum import StrEnum
 class AuthProvider(StrEnum):
     GOOGLE = "google"
     GITHUB = "github"
+    DEV = "dev"  # The temporary local user until sign-in arrives in M4.
 
 
 class InputModel(StrEnum):
