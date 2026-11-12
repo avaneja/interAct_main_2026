@@ -21,6 +21,19 @@ brew services start postgresql@18
   -c "CREATE DATABASE interact OWNER interact"
 ```
 
+Create the tables, or update them after pulling new migrations:
+
+```bash
+alembic upgrade head
+```
+
+After changing a model in `app/models/`, generate a migration, read it, then apply it:
+
+```bash
+alembic revision --autogenerate -m "describe the change"
+alembic upgrade head
+```
+
 Run the tests:
 
 ```bash
