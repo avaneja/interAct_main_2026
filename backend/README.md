@@ -47,3 +47,11 @@ Start the API at http://127.0.0.1:8000, with the health check at `/api/v1/health
 ```bash
 uvicorn app.main:app --reload
 ```
+
+Open http://127.0.0.1:8000/docs to try every endpoint in the browser. Until sign-in arrives in M4, every request acts as one local developer account, and the LLM is a predictable fake (`LLM_PROVIDER=fake`).
+
+To empty the local database and recreate the tables:
+
+```bash
+alembic downgrade base && alembic upgrade head
+```
