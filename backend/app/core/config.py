@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+psycopg://interact:interact@localhost:5432/interact"
+    llm_provider: Literal["fake"] = "fake"
     llm_base_url: str = "http://localhost:11434/v1"
     llm_model: str = "llama3.1:8b"
     llm_api_key: SecretStr = SecretStr("ollama")
