@@ -362,6 +362,7 @@ Keep **fixed-question mode** available internally for controlled research compar
 | `POST` | `/api/v1/sessions/{id}/start` | Begin the interview; move `READY` to `IN_PROGRESS` |
 | `GET` | `/api/v1/sessions/{id}/current-question` | Fetch active question |
 | `POST` | `/api/v1/sessions/{id}/answers` | Submit answer and trigger evaluation |
+| `POST` | `/api/v1/sessions/{id}/retry` | After a model failure, finish scoring the saved answer and continue |
 | `POST` | `/api/v1/sessions/{id}/pause` | Move `IN_PROGRESS` to `PAUSED` |
 | `POST` | `/api/v1/sessions/{id}/resume` | Move `PAUSED` to `IN_PROGRESS` and keep the active question |
 | `POST` | `/api/v1/sessions/{id}/finish` | End session and generate report |

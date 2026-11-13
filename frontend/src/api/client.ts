@@ -87,6 +87,7 @@ export const api = {
     request<QuestionView>('GET', session(id, 'current-question'), undefined, signal),
   submitAnswer: (id: string, questionId: string, text: string) =>
     request<AnswerResult>('POST', session(id, 'answers'), { question_id: questionId, text }),
+  retry: (id: string) => request<AnswerResult>('POST', session(id, 'retry')),
   pause: (id: string) => request<SessionView>('POST', session(id, 'pause')),
   resume: (id: string) => request<SessionView>('POST', session(id, 'resume')),
   finish: (id: string) => request<SessionView>('POST', session(id, 'finish')),

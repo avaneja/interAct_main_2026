@@ -102,12 +102,21 @@ def current_question(session_id: uuid.UUID, db: DbSession, user: CurrentUser) ->
 def submit_answer(
     session_id: uuid.UUID, body: AnswerSubmit, db: DbSession, user: CurrentUser, llm: LLM
 ) -> AnswerResult:
-    result = svc.submit_answer(db, user, session_id, body.question_id, body.text, llm)
+    return _answer_result(svc.submit_answer(db, user, session_id, body.question_id, body.text, llm))
+
+
+def _answer_result(result: svc.SubmitResult) -> AnswerResult:
     return AnswerResult(
         state=result.session.state,
         next_question=QuestionView.model_validate(result.next_question) if result.next_question else None,
         completed=result.session.state is SessionState.COMPLETED,
     )
+
+
+@router.post("/{session_id}/retry")
+def retry(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> AnswerResult:
+    """Finish scoring the last answer after a model failure, then continue the interview."""
+    return _answer_result(svc.retry(db, user, session_id, llm))
 
 
 @router.post("/{session_id}/pause")

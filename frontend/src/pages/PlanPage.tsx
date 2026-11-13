@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
 import type { SessionView } from '../api/types'
 import { Alert, Badge, Button, Card, PageTitle } from '../components/ui'
+import WaitingNotice from '../components/WaitingNotice'
 import { difficultyLabel, styleLabel } from '../lib/labels'
 import { pathForSession } from '../lib/sessionRoutes'
 import { useLoad } from '../lib/useLoad'
@@ -29,6 +30,7 @@ export default function PlanPage() {
 function PlanReview({ session }: { session: SessionView }) {
   const navigate = useNavigate()
   const [phase, setPhase] = useState<'idle' | 'confirming' | 'starting'>('idle')
+  const [startedAt, setStartedAt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   // A confirmed plan is fixed, even if starting then fails: only "Start" remains.
   const [confirmed, setConfirmed] = useState(session.state === 'READY')
@@ -44,6 +46,7 @@ function PlanReview({ session }: { session: SessionView }) {
         setConfirmed(true)
       }
       setPhase('starting')
+      setStartedAt(Date.now())
       await api.start(session.id)
       navigate(`/sessions/${session.id}/interview`)
     } catch (caught) {
@@ -118,9 +121,7 @@ function PlanReview({ session }: { session: SessionView }) {
       )}
 
       {error && <Alert title="Could not start the interview">{error}</Alert>}
-      {phase === 'starting' && (
-        <Alert kind="info">Preparing your first question. With a local model this can take up to a minute.</Alert>
-      )}
+      {phase === 'starting' && <WaitingNotice message="Preparing your first question…" startedAt={startedAt} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         {confirmed ? (

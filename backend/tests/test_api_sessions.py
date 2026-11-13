@@ -313,3 +313,48 @@ def test_the_plan_matches_the_questions_actually_asked(client):
 
     assert (question["type"], question["competency"]) == (plan[0]["question_type"], plan[0]["competency"])
 
+
+def test_retry_finishes_scoring_after_a_model_failure(client, fake_llm, db_engine):
+    session_id, question = started_session(client)
+    fake_llm.queue(LLMError("down"), LLMError("down"))
+    assert answer(client, session_id, question["id"]).status_code == 503
+
+    retried = client.post(url(session_id, "retry"))
+
+    assert retried.status_code == 200
+    assert retried.json()["next_question"]["sequence"] == 2
+    assert count(db_engine, Evaluation) == 1
+    assert client.post(url(session_id, "retry")).status_code == 409  # Nothing left to do.
+
+
+def test_retry_can_fail_again_without_creating_anything(client, fake_llm, db_engine):
+    session_id, question = started_session(client)
+    fake_llm.queue(LLMError("down"), LLMError("down"))
+    answer(client, session_id, question["id"])
+    fake_llm.queue(LLMError("down"), LLMError("down"))
+
+    assert client.post(url(session_id, "retry")).status_code == 503
+    assert count(db_engine, Evaluation) == 0
+    assert client.get(url(session_id)).json()["state"] == "EVALUATING"
+
+
+def test_retry_after_the_last_answer_completes_the_interview(client, fake_llm):
+    session_id, question = started_session(client)
+    for _ in range(4):
+        question = answer(client, session_id, question["id"]).json()["next_question"]
+    fake_llm.queue(LLMError("down"), LLMError("down"))
+    answer(client, session_id, question["id"])
+
+    result = client.post(url(session_id, "retry")).json()
+
+    assert result["completed"] is True
+    assert client.get(url(session_id, "report")).status_code == 200
+
+
+def test_retry_is_refused_when_nothing_failed(client):
+    session_id, _ = started_session(client)
+
+    response = client.post(url(session_id, "retry"))
+
+    assert response.status_code == 409
+    assert "Nothing is waiting" in response.json()["detail"]

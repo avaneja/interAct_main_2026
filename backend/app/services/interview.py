@@ -572,6 +572,22 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
     return SubmitResult(session=session, next_question=_unanswered(db, session.id))
 
 
+def retry(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
+    """Finish the step a model failure interrupted: score the saved answer, then move on.
+
+    The same as resubmitting the last answer, for a client that no longer has
+    its text. Safe to call twice: a second call finds nothing left to do.
+    """
+    session = get_session(db, user, session_id)
+    if session.state is not SessionState.EVALUATING:
+        raise Conflict("Nothing is waiting to be retried.")
+    latest = _questions(db, session.id)[-1]
+    answer = db.scalar(select(Answer).where(Answer.question_id == latest.id))
+    if db.scalar(select(Evaluation).where(Evaluation.answer_id == answer.id)) is None:
+        _evaluate(db, llm, answer)
+    return _advance(db, user, session_id, llm)
+
+
 def pause(db: Session, user: User, session_id: uuid.UUID) -> InterviewSession:
     session = get_session(db, user, session_id, lock=True)
     _move(session, Event.PAUSE)

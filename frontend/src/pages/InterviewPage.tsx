@@ -3,6 +3,7 @@ import { Navigate, useNavigate, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
 import type { AnswerResult, QuestionView, SessionView } from '../api/types'
 import { Alert, Badge, Button, Card } from '../components/ui'
+import WaitingNotice from '../components/WaitingNotice'
 import { clearDraft, loadDraft, saveDraft } from '../lib/drafts'
 import { difficultyLabel, styleLabel } from '../lib/labels'
 import { pathForSession } from '../lib/sessionRoutes'
@@ -57,17 +58,21 @@ function Interview({
 }) {
   const navigate = useNavigate()
   const [text, setText] = useState(() => (question ? loadDraft(question.id) : ''))
-  const [busy, setBusy] = useState<'submit' | 'pause' | 'resume' | 'finish' | null>(null)
+  const [busy, setBusy] = useState<'submit' | 'retry' | 'pause' | 'resume' | 'finish' | null>(null)
+  const [startedAt, setStartedAt] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const total = session.config?.question_count ?? 0
 
   async function act(kind: NonNullable<typeof busy>, action: () => Promise<unknown>) {
     setBusy(kind)
+    setStartedAt(Date.now())
     setError(null)
     try {
       await action()
     } catch (caught) {
+      // The model failed after the answer was saved: show the retry view.
+      if (caught instanceof ApiError && caught.status === 503 && kind === 'submit') return onChange()
       setError(caught instanceof ApiError ? caught.message : 'Something went wrong. Try again.')
       setBusy(null)
     }
@@ -82,6 +87,7 @@ function Interview({
     event.preventDefault()
     if (!question || !text.trim()) return
     await act('submit', async () => {
+      // Sending the same answer again is safe, so a dropped connection can simply be retried.
       const result = await api.submitAnswer(session.id, question.id, text)
       clearDraft(question.id)
       afterAnswer(result)
@@ -113,14 +119,21 @@ function Interview({
 
   if (session.state === 'EVALUATING' || !question) {
     return (
-      <section className="mx-auto max-w-2xl">
+      <section className="mx-auto max-w-2xl space-y-4">
         <Alert
           kind="warning"
           title="Your last answer is saved, but scoring did not finish"
-          action={<Button variant="secondary" onClick={onChange}>Check again</Button>}
+          action={
+            <Button busy={busy === 'retry'} onClick={() => act('retry', async () => afterAnswer(await api.retry(session.id)))}>
+              {busy === 'retry' ? 'Scoring…' : 'Try scoring again'}
+            </Button>
+          }
         >
-          The model did not respond in time. Nothing was scored yet.
+          The model did not respond, so nothing was scored and no score was guessed. Trying again scores the answer
+          you already sent.
         </Alert>
+        {busy === 'retry' && <WaitingNotice message="Scoring your answer…" startedAt={startedAt} />}
+        {error && <Alert title="Scoring failed again">{error}</Alert>}
       </section>
     )
   }
@@ -172,10 +185,8 @@ function Interview({
           </span>
         </div>
 
-        {error && <Alert title="Your answer was not sent">{error}</Alert>}
-        {busy === 'submit' && (
-          <Alert kind="info">Saving your answer and preparing what comes next. With a local model this can take up to a minute.</Alert>
-        )}
+        {error && <Alert title="Your answer was not sent">{error} Your text is still here, so you can send it again.</Alert>}
+        {busy === 'submit' && <WaitingNotice message="Scoring your answer and preparing what comes next…" startedAt={startedAt} />}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex gap-2">
