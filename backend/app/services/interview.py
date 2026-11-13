@@ -18,6 +18,8 @@ rules this module enforces:
 - An answer that cannot support a confident score is flagged with the reason:
   non-answers are scored zero without a model call, and the model's own flag
   and an off-topic check cover the rest.
+- Sentences in an answer that try to instruct the grader are removed before
+  grading, and the report says so.
 - A question that misses its requested style is regenerated once, then kept
   and flagged with the reason.
 
@@ -59,7 +61,14 @@ from app.schemas import (
     StyleVerdict,
 )
 from app.services import prompts
-from app.services.evidence import EvidenceCheck, non_answer_reason, shares_no_terms, verify_evidence
+from app.services.evidence import (
+    REMOVED_MARKER,
+    EvidenceCheck,
+    non_answer_reason,
+    remove_grader_instructions,
+    shares_no_terms,
+    verify_evidence,
+)
 from app.services.question_styles import question_type_for, style_rule_problem
 from app.services.reporting import build_report
 from app.services.rubrics import RubricSpec, rubric_for
@@ -461,8 +470,10 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
     rubric = db.get(Rubric, question.rubric_id)
     criteria = rubric.criteria_json
     rubric_label = f"{rubric.name}-v{rubric.version}"
+    # Sentences that try to instruct the grader never reach the model.
+    graded_text, instructions_removed = remove_grader_instructions(answer.text)
 
-    non_answer = non_answer_reason(answer.text)
+    non_answer = non_answer_reason(graded_text.replace(REMOVED_MARKER, ""))
     if non_answer is not None:
         # Nothing to grade: score zero without asking a model, which might invent credit.
         checked = EvidenceCheck(_ungraded(criteria, question.competency, non_answer), verified=0, removed=[])
@@ -474,7 +485,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
             question_type=question.type,
             difficulty=question.difficulty,
             competency=question.competency,
-            answer=answer.text,
+            answer=graded_text,
             criteria=criteria,
             answer_key=question.answer_key_json,
         )
@@ -498,6 +509,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
             scores_json={
                 **checked.evaluation.model_dump(mode="json", exclude={"criteria"}),
                 "insufficient_reason": insufficient_reason,
+                "instructions_removed": instructions_removed,
                 "evidence": {"quotes_verified": checked.verified, "quotes_removed": len(checked.removed)},
             },
             evidence_json=[c.model_dump(mode="json") for c in checked.evaluation.criteria],

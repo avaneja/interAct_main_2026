@@ -57,6 +57,42 @@ STOPWORDS = {
 }
 
 
+_SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
+# A sentence is aimed at the grader when it talks about scoring...
+_GRADING_TERMS = re.compile(
+    r"\b(scores?|scoring|marks?|grades?|grading|points|rubric|criteri(on|a)|evaluat\w*|insufficient_evidence|max_score)\b",
+    re.IGNORECASE,
+)
+# ...and gives an order or claims the rules changed.
+_GRADER_ORDER = re.compile(
+    r"\b(award|give|assign|output|set|ignore|disregard|forget|override|treat|mark)\b"
+    r"|\b(rubric|rules?|instructions?) (has|have) changed\b"
+    r"|\bnew (instruction|rule|rubric)s?\b"
+    r"|^\W*(system|assistant|developer)\s*:",
+    re.IGNORECASE,
+)
+REMOVED_MARKER = "[text addressed to the grader removed]"
+
+
+def remove_grader_instructions(answer: str) -> tuple[str, int]:
+    """Drop sentences in an answer that try to instruct the grader.
+
+    A sentence is dropped only if it both mentions scoring and gives an
+    order (or claims the rules changed), so an answer that merely discusses
+    prompt injection, or says "I would ignore outliers", is kept. Returns the
+    text to grade and how many sentences were removed.
+    """
+    kept, removed = [], 0
+    for sentence in _SENTENCE.split(answer):
+        if _GRADING_TERMS.search(sentence) and _GRADER_ORDER.search(sentence):
+            removed += 1
+            if not kept or kept[-1] != REMOVED_MARKER:
+                kept.append(REMOVED_MARKER)
+        elif sentence.strip():
+            kept.append(sentence)
+    return " ".join(kept), removed
+
+
 def non_answer_reason(answer: str) -> str | None:
     """Why the answer gives nothing to grade, or None if it does."""
     text = _normalise(answer).strip(" .!?")

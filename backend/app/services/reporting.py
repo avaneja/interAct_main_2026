@@ -39,6 +39,7 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
     notices: list[str] = []
     low_confidence: list[int] = []
     off_style: list[int] = []
+    instructed: list[int] = []
     quotes_removed = 0
 
     for question in questions:
@@ -79,6 +80,8 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
             if scores.get("insufficient_evidence"):
                 low_confidence.append(question.sequence)
             quotes_removed += scores.get("evidence", {}).get("quotes_removed", 0)
+            if scores.get("instructions_removed"):
+                instructed.append(question.sequence)
         entries.append(entry)
 
     for totals in competencies.values():
@@ -100,6 +103,11 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
     if off_style:
         notices.append(
             f"Question {', '.join(map(str, off_style))} did not fully match the requested question style."
+        )
+    if instructed:
+        notices.append(
+            f"Answer {', '.join(map(str, instructed))} contained text addressed to the grader "
+            "(for example, asking for full marks); it was removed before grading."
         )
     if quotes_removed:
         notices.append(
