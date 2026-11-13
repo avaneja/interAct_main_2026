@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, api } from '../api/client'
@@ -29,12 +29,18 @@ describe('plan page', () => {
   it('confirms, starts and opens the interview', async () => {
     mockedApi.getSession.mockResolvedValue(configured)
     mockedApi.confirmPlan.mockResolvedValue(makeSession({ state: 'READY' }))
-    mockedApi.start.mockResolvedValue(makeQuestion())
+    mockedApi.start.mockImplementation(async () => {
+      // Like the server: once started, the session is in progress with its first question.
+      mockedApi.getSession.mockResolvedValue(makeSession())
+      mockedApi.currentQuestion.mockResolvedValue(makeQuestion())
+      return makeQuestion()
+    })
     const router = renderApp('/sessions/s-1/plan')
 
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Confirm and start' }))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/interview'))
+    expect(await screen.findByRole('heading', { name: 'What is a process?' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/sessions/s-1/interview')
     expect(mockedApi.confirmPlan).toHaveBeenCalledWith('s-1')
     expect(mockedApi.start).toHaveBeenCalledWith('s-1')
   })

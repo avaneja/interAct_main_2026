@@ -9,6 +9,7 @@ export default mergeConfig(
       setupFiles: ['./src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}'],
       restoreMocks: true,
+      testTimeout: 15_000,
     },
   }),
 )
