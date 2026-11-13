@@ -1,6 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router'
 import Layout from './components/Layout.tsx'
 import ConfigurePage from './pages/ConfigurePage.tsx'
+import HistoryPage from './pages/HistoryPage.tsx'
 import HomePage from './pages/HomePage.tsx'
 import InterviewPage from './pages/InterviewPage.tsx'
 import NotFoundPage from './pages/NotFoundPage.tsx'
@@ -15,6 +16,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'new', element: <TopicPage /> },
+      { path: 'history', element: <HistoryPage /> },
       { path: 'sessions/:id/topic', element: <TopicPage /> },
       { path: 'sessions/:id/configure', element: <ConfigurePage /> },
       { path: 'sessions/:id/plan', element: <PlanPage /> },
