@@ -209,7 +209,7 @@ def _record_llm_call(
             session_id=session_id,
             purpose=request.purpose,
             model=model,
-            prompt_version=prompts.PROMPT_VERSION,
+            prompt_version=request.prompt_version,
             raw_output=raw,
             validation_status=status,
         )
@@ -490,7 +490,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
         insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer)
         if insufficient_reason and not checked.evaluation.insufficient_evidence:
             checked.evaluation = checked.evaluation.model_copy(update={"insufficient_evidence": True})
-        evaluator_version = f"{llm.model}|{rubric_label}|prompt-{prompts.PROMPT_VERSION}"
+        evaluator_version = f"{llm.model}|{rubric_label}|{request.prompt_version}"
 
     db.add(
         Evaluation(

@@ -24,6 +24,8 @@ class LLMRequest:
     # A structured copy of the inputs. FakeLLM reads it to build replies;
     # real providers ignore it and only see `system` and `user`.
     hints: Mapping[str, Any] = field(default_factory=dict)
+    # Recorded with every call, so results can be traced to the exact prompt.
+    prompt_version: str = ""
 
 
 @dataclass(frozen=True)

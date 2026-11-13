@@ -140,7 +140,7 @@ def test_the_evaluation_records_model_rubric_and_prompt_versions(db, user):
 
     svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
 
-    expected = f"fake-llm|reasoning-v1|prompt-{prompts.PROMPT_VERSION}"
+    expected = f"fake-llm|reasoning-v1|{prompts.PROMPT_VERSIONS['evaluate_answer']}"
     assert db.scalar(select(Evaluation)).evaluator_version == expected
 
 
