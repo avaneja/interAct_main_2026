@@ -1,0 +1,6 @@
+# InterAct runs llama3.1:8b with an 8K context. Without this, Ollama uses the
+# model's 128K maximum, which needs over 20 GB of memory and makes replies
+# very slow on a 16 GB Mac. Our prompts are under 2K tokens.
+# Create it with: ollama create interact-llama3.1:8b -f ollama/Modelfile.llama3.1-8b
+FROM llama3.1:8b
+PARAMETER num_ctx 8192

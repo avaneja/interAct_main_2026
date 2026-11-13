@@ -1,0 +1,6 @@
+# InterAct runs qwen3:8b with an 8K context. Without this, Ollama may use the
+# model's maximum context, which needs far more memory than a 16 GB Mac has
+# and makes replies very slow. Our prompts are under 2K tokens.
+# Create it with: ollama create interact-qwen3:8b -f ollama/Modelfile.qwen3-8b
+FROM qwen3:8b
+PARAMETER num_ctx 8192

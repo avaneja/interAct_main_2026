@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://interact:interact@localhost:5432/interact"
     llm_provider: Literal["fake", "openai_compatible"] = "fake"
     llm_base_url: str = "http://localhost:11434/v1"
-    llm_model: str = "llama3.1:8b"
+    llm_model: str = "interact-llama3.1:8b"
     llm_api_key: SecretStr = SecretStr("ollama")
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=5)

@@ -29,6 +29,9 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error"]
+# Real-model checks are slow, so they only run when asked: pytest -m ollama
+addopts = "-m 'not ollama'"
 markers = [
     "postgres: needs the PostgreSQL server from DATABASE_URL; skipped when it is not running",
+    "ollama: calls real models in a local Ollama; run with pytest -m ollama",
 ]
