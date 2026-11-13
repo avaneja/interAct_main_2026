@@ -11,9 +11,12 @@ Start the backend first (see `backend/README.md`). Vite forwards `/api` to `http
 
 ```bash
 npm test           # unit and page tests (Vitest, Testing Library)
+npm run test:e2e   # a full interview in Chrome against the real backend
 npm run lint
 npm run build      # type-check and build into dist/
 ```
+
+The end-to-end test starts its own backend (on a throwaway SQLite database, with the fake LLM) and frontend on ports 8001 and 5174, and uses your installed Google Chrome. It needs the backend's virtual environment from `backend/README.md`.
 
 ## Layout
 
@@ -22,3 +25,4 @@ npm run build      # type-check and build into dist/
 - `src/components/`: shared building blocks such as buttons and alerts
 - `src/lib/`: helpers such as labels and where a session continues
 - `src/test/`: test helpers and sample data
+- `e2e/`: browser tests (Playwright)
