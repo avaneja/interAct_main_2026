@@ -2,8 +2,9 @@
 
 A provider only turns a request into raw text. Parsing and validating that
 text is the caller's job, so the raw reply can be stored before anything is
-trusted. M2 adds the OpenAI-compatible adapter for Ollama and hosted
-providers; until then the app and the tests use FakeLLM.
+trusted. LLM_PROVIDER picks FakeLLM ("fake", used by the tests) or the
+OpenAI-compatible adapter for Ollama and hosted providers
+("openai_compatible").
 """
 
 import json
@@ -103,8 +104,18 @@ class FakeLLM:
 
 
 def get_llm() -> LLMClient:
-    """FastAPI dependency for the configured provider."""
-    provider = get_settings().llm_provider
-    if provider == "fake":
+    """FastAPI dependency for the provider named by LLM_PROVIDER."""
+    settings = get_settings()
+    if settings.llm_provider == "fake":
         return FakeLLM()
-    raise LLMError(f"LLM provider '{provider}' is not available yet")
+
+    from app.core.openai_compatible import OpenAICompatibleLLM
+
+    return OpenAICompatibleLLM(
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+        api_key=settings.llm_api_key.get_secret_value(),
+        timeout_seconds=settings.llm_timeout_seconds,
+        max_retries=settings.llm_max_retries,
+        temperature=settings.llm_temperature,
+    )

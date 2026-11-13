@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -23,10 +23,13 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     database_url: str = "postgresql+psycopg://interact:interact@localhost:5432/interact"
-    llm_provider: Literal["fake"] = "fake"
+    llm_provider: Literal["fake", "openai_compatible"] = "fake"
     llm_base_url: str = "http://localhost:11434/v1"
     llm_model: str = "llama3.1:8b"
     llm_api_key: SecretStr = SecretStr("ollama")
+    llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
+    llm_max_retries: int = Field(default=2, ge=0, le=5)
+    llm_temperature: float = Field(default=0.2, ge=0, le=2)
 
 
 @lru_cache

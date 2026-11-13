@@ -14,13 +14,13 @@ dependencies = [
     "pydantic-settings~=2.16",
     "sqlalchemy~=2.1.8",
     "psycopg[binary]~=3.3",
+    "httpx2~=2.16",
     "alembic~=1.20",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest~=9.2",
-    "httpx2~=2.16",
 ]
 
 [tool.setuptools.packages.find]
