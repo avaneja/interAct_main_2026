@@ -43,6 +43,12 @@ class GroundingStatus(StrEnum):
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
+class StyleStatus(StrEnum):
+    PASSED = "PASSED"
+    FLAGGED = "FLAGGED"  # Still off-style after regenerating; kept and reported.
+    UNCHECKED = "UNCHECKED"
+
+
 class DocumentStatus(StrEnum):
     UPLOADED = "UPLOADED"
     PROCESSING = "PROCESSING"

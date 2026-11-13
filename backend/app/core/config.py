@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
+    style_check: Literal["rules", "rules_and_llm"] = "rules_and_llm"
 
 
 @lru_cache

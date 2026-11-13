@@ -382,7 +382,11 @@ def test_every_llm_attempt_is_stored_raw(db, user, llm):
     svc.start(db, user, session.id, llm)
 
     calls = list(db.scalars(select(LLMCall).order_by(LLMCall.created_at)))
-    assert [c.validation_status for c in calls] == [ValidationStatus.INVALID, ValidationStatus.VALID]
+    assert [(c.purpose, c.validation_status) for c in calls] == [
+        ("generate_question", ValidationStatus.INVALID),
+        ("generate_question", ValidationStatus.VALID),
+        ("classify_style", ValidationStatus.VALID),
+    ]
     assert calls[0].raw_output == "garbage reply"
     assert json.loads(calls[1].raw_output)["type"] == "CONCEPTUAL"
     assert all(c.session_id == session.id and c.prompt_version for c in calls)

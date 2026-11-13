@@ -6,6 +6,7 @@ test it. MIXED is not a style of its own: it picks concrete styles by the
 mix policy below.
 """
 
+import re
 from dataclasses import dataclass
 
 from app.models.enums import Difficulty
@@ -74,6 +75,40 @@ DIFFICULTY_GUIDE: dict[Difficulty, str] = {
 # moves from recall to application. Question counts (5, 10, 15) are
 # multiples of five, so the split is always exact.
 MIX_ORDER: list[Q] = [Q.DIRECT, Q.CONCEPTUAL, Q.CASE_BASED, Q.SCENARIO_BASED, Q.APPLICATION]
+
+
+def style_rule_problem(question_type: Q, prompt: str) -> str | None:
+    """A quick check for clear style misses. Returns the problem, or None.
+
+    These rules only catch obvious mismatches, so they cannot reject a
+    reasonable question; the optional LLM check judges the finer cases.
+    """
+    text = prompt.lower()
+    words = len(re.findall(r"\w+", text))
+    second_person = re.search(r"\byou(r|'re)?\b", text)
+    if question_type is Q.DIRECT:
+        if words > 40:
+            return "too long for a direct question"
+        if second_person and re.search(r"\d", text):
+            return "reads like a case or scenario, not a direct question"
+    elif question_type is Q.CONCEPTUAL:
+        if not re.search(r"\b(why|how|explain|compare|contrast|relationship|differ)\w*", text):
+            return "does not ask why or how, or how ideas relate"
+    elif question_type is Q.CASE_BASED:
+        if not re.search(r"\d", text) and len(re.findall(r"[.!?]", prompt)) < 2:
+            return "has no concrete case details to analyse"
+    elif question_type is Q.SCENARIO_BASED:
+        if not second_person:
+            return "does not put the candidate in a situation"
+        if not re.search(r"\b(would|should|will|do|can)\s+you\b|\byour (first|next) step", text):
+            return "does not ask what the candidate would do"
+    elif question_type is Q.APPLICATION:
+        if not re.search(
+            r"\b(design|propose|outline|plan|build|implement|develop|write|create|devise|sketch|describe how)\w*",
+            text,
+        ):
+            return "does not ask for a design, plan or method"
+    return None
 
 
 def question_type_for(config_type: Q, sequence: int) -> Q:

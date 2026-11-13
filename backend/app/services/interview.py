@@ -12,6 +12,8 @@ rules this module enforces:
 - When the LLM fails or returns invalid output after a limited number of
   tries, no score is written; resubmitting the same answer retries.
 - Every LLM reply is stored raw in llm_calls, apart from the validated rows.
+- A question that misses its requested style is regenerated once, then kept
+  and flagged with the reason.
 
 LLM calls happen without holding a row lock. Each one is committed to
 llm_calls on its own, and the session is locked again and re-checked before
@@ -40,13 +42,15 @@ from app.models import (
     Rubric,
     User,
 )
-from app.models.enums import InputModel, SessionState, ValidationStatus
-from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext
+from app.core.config import get_settings
+from app.models.enums import InputModel, SessionState, StyleStatus, ValidationStatus
+from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext, StyleVerdict
 from app.services import prompts
-from app.services.question_styles import question_type_for
+from app.services.question_styles import question_type_for, style_rule_problem
 from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
+STYLE_ATTEMPTS = 2
 EVALUATOR_VERSION = f"fake-rubric-{prompts.PROMPT_VERSION}"
 
 # A placeholder rubric for M1. M2 designs the real one.
@@ -290,9 +294,41 @@ def _unanswered(db: Session, session_id: uuid.UUID) -> Question | None:
     return db.scalar(query)
 
 
+@dataclass
+class CheckedQuestion:
+    generated: GeneratedQuestion
+    style_status: StyleStatus
+    style_note: str | None = None
+
+
+def _style_problem(db: Session, llm: LLMClient, session_id: uuid.UUID, question: GeneratedQuestion) -> str | None:
+    """Why the question misses its requested style, or None if it fits.
+
+    Rules run first. The LLM check runs only when the rules pass and
+    STYLE_CHECK asks for it; if that check itself fails, the rules' pass stands.
+    """
+    problem = style_rule_problem(question.type, question.prompt)
+    if problem or get_settings().style_check == "rules":
+        return problem
+    request = prompts.style_check_request(question_prompt=question.prompt, requested=question.type)
+    try:
+        verdict = _ask_llm(db, llm, request, StyleVerdict, session_id=session_id)
+    except LLMUnavailable:
+        return None
+    if verdict.style is not question.type:
+        return f"reads as {verdict.style}: {verdict.reason}"
+    return None
+
+
 def _generate_question(
     db: Session, llm: LLMClient, session: InterviewSession, sequence: int
-) -> GeneratedQuestion:
+) -> CheckedQuestion:
+    """Generate a question in the planned style.
+
+    An off-style question is regenerated; if the last try is still off-style
+    it is kept and flagged with the reason, so a strict check never blocks
+    an interview.
+    """
     context, config = _confirmed_plan(session)
     question_type = question_type_for(config.question_type, sequence)
     competencies = context.subtopics or [context.topic]
@@ -310,12 +346,18 @@ def _generate_question(
         if question.type is not question_type or question.difficulty is not config.difficulty:
             raise ValueError("the question does not match the requested type or difficulty")
 
-    return _ask_llm(db, llm, request, GeneratedQuestion, session_id=session.id, check=matches_request)
+    for _ in range(STYLE_ATTEMPTS):
+        generated = _ask_llm(db, llm, request, GeneratedQuestion, session_id=session.id, check=matches_request)
+        problem = _style_problem(db, llm, session.id, generated)
+        if problem is None:
+            return CheckedQuestion(generated, StyleStatus.PASSED)
+    return CheckedQuestion(generated, StyleStatus.FLAGGED, problem)
 
 
 def _add_question(
-    db: Session, session: InterviewSession, generated: GeneratedQuestion, sequence: int, rubric_id: uuid.UUID
+    db: Session, session: InterviewSession, checked: CheckedQuestion, sequence: int, rubric_id: uuid.UUID
 ) -> Question:
+    generated = checked.generated
     question = Question(
         session_id=session.id,
         sequence=sequence,
@@ -327,6 +369,8 @@ def _add_question(
         source_chunk_ids=[str(chunk_id) for chunk_id in generated.source_chunk_ids],
         supporting_quote=generated.supporting_quote,
         answer_key_json=generated.answer_key.model_dump() if generated.answer_key else None,
+        style_status=checked.style_status,
+        style_note=checked.style_note,
     )
     db.add(question)
     return question
@@ -339,12 +383,12 @@ def start(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> Que
     session = get_session(db, user, session_id)
     _confirmed_plan(session)
     next_state(session.state, Event.START)  # Fail fast before calling the LLM.
-    generated = _generate_question(db, llm, session, sequence=1)
+    checked = _generate_question(db, llm, session, sequence=1)
     rubric_id = _default_rubric(db).id  # Before the lock: it may commit.
 
     session = get_session(db, user, session_id, lock=True)
     _move(session, Event.START)  # Re-checked: a parallel request may have started it.
-    question = _add_question(db, session, generated, sequence=1, rubric_id=rubric_id)
+    question = _add_question(db, session, checked, sequence=1, rubric_id=rubric_id)
     db.commit()
     return question
 
@@ -452,11 +496,11 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
             db.commit()
         return SubmitResult(session=session, next_question=None)
 
-    generated = _generate_question(db, llm, session, sequence=asked + 1)
+    checked = _generate_question(db, llm, session, sequence=asked + 1)
     rubric_id = _default_rubric(db).id  # Before the lock: it may commit.
     session = get_session(db, user, session_id, lock=True)
     if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:
-        _add_question(db, session, generated, sequence=asked + 1, rubric_id=rubric_id)
+        _add_question(db, session, checked, sequence=asked + 1, rubric_id=rubric_id)
         _move(session, Event.NEXT_QUESTION)
         db.commit()
     return SubmitResult(session=session, next_question=_unanswered(db, session.id))

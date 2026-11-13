@@ -29,6 +29,7 @@ from app.models.enums import (
     MessageRole,
     QuestionType,
     SessionState,
+    StyleStatus,
 )
 
 
@@ -105,6 +106,11 @@ class Question(IdMixin, CreatedAtMixin, Base):
     grounding_status: Mapped[GroundingStatus] = mapped_column(
         enum_type(GroundingStatus), default=GroundingStatus.NOT_APPLICABLE
     )
+    # Whether the question matches its requested style; the note says why not.
+    style_status: Mapped[StyleStatus] = mapped_column(
+        enum_type(StyleStatus), default=StyleStatus.UNCHECKED, server_default=StyleStatus.UNCHECKED.value
+    )
+    style_note: Mapped[str | None] = mapped_column(Text)
 
     session: Mapped[InterviewSession] = relationship(back_populates="questions")
     answer: Mapped["Answer | None"] = relationship(

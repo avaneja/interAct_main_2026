@@ -89,6 +89,19 @@ class GeneratedQuestion(LLMOutput):
         return self
 
 
+class StyleVerdict(LLMOutput):
+    """The style check's judgement of which style a question really is."""
+
+    style: QuestionType
+    reason: LongText
+
+    @model_validator(mode="after")
+    def check_style(self) -> Self:
+        if self.style is QuestionType.MIXED:
+            raise ValueError("the verdict must name a concrete style")
+        return self
+
+
 class QuestionView(BaseModel):
     """A question as the client sees it while answering.
 

@@ -42,6 +42,22 @@ class LLMClient(Protocol):
     def complete(self, request: LLMRequest) -> LLMResponse: ...
 
 
+# One fake question per style, each written to pass that style's rule check.
+FAKE_QUESTIONS = {
+    "DIRECT": "Question {n}: What is {competency}?",
+    "CONCEPTUAL": "Question {n}: Why does {competency} matter in {topic}, and how does it work?",
+    "CASE_BASED": (
+        "Question {n}: A team reports 92% accuracy but only 35% recall when handling "
+        "{competency} in {topic}. Diagnose the result."
+    ),
+    "SCENARIO_BASED": (
+        "Question {n}: You own {competency} on a {topic} project and the release is tomorrow. "
+        "What would you do first, and why?"
+    ),
+    "APPLICATION": "Question {n}: Design a step-by-step plan to apply {competency} in {topic}.",
+}
+
+
 class FakeLLM:
     """A predictable stand-in for a real model, for tests and local development.
 
@@ -71,15 +87,18 @@ class FakeLLM:
     def _default_reply(self, request: LLMRequest) -> dict[str, Any]:
         hints = request.hints
         if request.purpose == "generate_question":
+            template = FAKE_QUESTIONS.get(hints["question_type"], FAKE_QUESTIONS["CONCEPTUAL"])
             return {
                 "type": hints["question_type"],
                 "competency": hints["competency"],
                 "difficulty": hints["difficulty"],
-                "prompt": (
-                    f"Question {hints['sequence']}: explain {hints['competency']} "
-                    f"and give an example from {hints['topic']}."
+                "prompt": template.format(
+                    n=hints["sequence"], competency=hints["competency"], topic=hints["topic"]
                 ),
             }
+        if request.purpose == "classify_style":
+            # The fake always agrees, so tests queue a reply to simulate a mismatch.
+            return {"style": hints["question_type"], "reason": "Fake style check."}
         if request.purpose == "evaluate_answer":
             # More words earn more credit, so tests can steer scores by answer length.
             words = len(re.findall(r"\w+", hints["answer"]))
