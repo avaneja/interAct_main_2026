@@ -41,6 +41,41 @@ def quote_in_answer(quote: str, answer: str) -> bool:
     return True
 
 
+# Answers that give nothing to grade, compared after normalising.
+NON_ANSWERS = {
+    "i don't know", "i dont know", "dont know", "don't know", "idk", "no idea", "not sure",
+    "i'm not sure", "im not sure", "pass", "skip", "n/a", "na", "nothing", "no comment",
+}
+MIN_WORDS = 3
+STOPWORDS = {
+    "about", "after", "again", "also", "because", "been", "before", "being", "between", "both",
+    "could", "does", "doing", "down", "each", "from", "have", "having", "here", "into", "just",
+    "like", "more", "most", "much", "only", "other", "over", "same", "should", "some", "such",
+    "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through",
+    "under", "very", "what", "when", "where", "which", "while", "will", "with", "would", "your",
+    "yours", "were", "make", "made", "thing", "things", "really", "think",
+}
+
+
+def non_answer_reason(answer: str) -> str | None:
+    """Why the answer gives nothing to grade, or None if it does."""
+    text = _normalise(answer).strip(" .!?")
+    if text in NON_ANSWERS:
+        return "the candidate said they do not know"
+    if len(re.findall(r"\w+", text)) < MIN_WORDS:
+        return "the answer is too short to grade"
+    return None
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z][a-z'-]{3,}", _normalise(text)) if w not in STOPWORDS}
+
+
+def shares_no_terms(answer: str, reference: str) -> bool:
+    """True if the answer uses none of the meaningful words of the question and its topic."""
+    return not (_content_words(answer) & _content_words(reference))
+
+
 @dataclass
 class EvidenceCheck:
     evaluation: AnswerEvaluation

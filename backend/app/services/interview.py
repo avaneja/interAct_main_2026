@@ -15,6 +15,9 @@ rules this module enforces:
 - Scores stay within the rubric: every criterion must match the rubric's name
   and maximum, and totals are computed. Evidence quotes not found in the
   answer are removed and counted.
+- An answer that cannot support a confident score is flagged with the reason:
+  non-answers are scored zero without a model call, and the model's own flag
+  and an off-topic check cover the rest.
 - A question that misses its requested style is regenerated once, then kept
   and flagged with the reason.
 
@@ -47,9 +50,16 @@ from app.models import (
 )
 from app.core.config import get_settings
 from app.models.enums import InputModel, SessionState, StyleStatus, ValidationStatus
-from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext, StyleVerdict
+from app.schemas import (
+    AnswerEvaluation,
+    CriterionScore,
+    GeneratedQuestion,
+    InterviewConfig,
+    InterviewContext,
+    StyleVerdict,
+)
 from app.services import prompts
-from app.services.evidence import verify_evidence
+from app.services.evidence import EvidenceCheck, non_answer_reason, shares_no_terms, verify_evidence
 from app.services.question_styles import question_type_for, style_rule_problem
 from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
@@ -449,39 +459,81 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
     question = db.get(Question, answer.question_id)
     rubric = db.get(Rubric, question.rubric_id)
     criteria = rubric.criteria_json
-    request = prompts.evaluation_request(
-        question_prompt=question.prompt,
-        question_type=question.type,
-        difficulty=question.difficulty,
-        competency=question.competency,
-        answer=answer.text,
-        criteria=criteria,
-        answer_key=question.answer_key_json,
-    )
+    rubric_label = f"{rubric.name}-v{rubric.version}"
 
-    def matches_rubric(evaluation: AnswerEvaluation) -> None:
-        returned = {(c.name, c.max_score) for c in evaluation.criteria}
-        if returned != {(c["name"], c["max_score"]) for c in criteria}:
-            raise ValueError("the evaluation does not score exactly the rubric's criteria")
+    non_answer = non_answer_reason(answer.text)
+    if non_answer is not None:
+        # Nothing to grade: score zero without asking a model, which might invent credit.
+        checked = EvidenceCheck(_ungraded(criteria, question.competency, non_answer), verified=0, removed=[])
+        insufficient_reason = non_answer
+        evaluator_version = f"rule|{rubric_label}|non-answer"
+    else:
+        request = prompts.evaluation_request(
+            question_prompt=question.prompt,
+            question_type=question.type,
+            difficulty=question.difficulty,
+            competency=question.competency,
+            answer=answer.text,
+            criteria=criteria,
+            answer_key=question.answer_key_json,
+        )
 
-    evaluation = _ask_llm(db, llm, request, AnswerEvaluation, session_id=answer.session_id, check=matches_rubric)
-    # Quotes not found in the answer are dropped, so only the candidate's own words are shown.
-    checked = verify_evidence(evaluation, answer.text)
+        def matches_rubric(evaluation: AnswerEvaluation) -> None:
+            returned = {(c.name, c.max_score) for c in evaluation.criteria}
+            if returned != {(c["name"], c["max_score"]) for c in criteria}:
+                raise ValueError("the evaluation does not score exactly the rubric's criteria")
+
+        evaluation = _ask_llm(db, llm, request, AnswerEvaluation, session_id=answer.session_id, check=matches_rubric)
+        # Quotes not found in the answer are dropped, so only the candidate's own words are shown.
+        checked = verify_evidence(evaluation, answer.text)
+        insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer)
+        if insufficient_reason and not checked.evaluation.insufficient_evidence:
+            checked.evaluation = checked.evaluation.model_copy(update={"insufficient_evidence": True})
+        evaluator_version = f"{llm.model}|{rubric_label}|prompt-{prompts.PROMPT_VERSION}"
+
     db.add(
         Evaluation(
             answer_id=answer.id,
             scores_json={
                 **checked.evaluation.model_dump(mode="json", exclude={"criteria"}),
+                "insufficient_reason": insufficient_reason,
                 "evidence": {"quotes_verified": checked.verified, "quotes_removed": len(checked.removed)},
             },
             evidence_json=[c.model_dump(mode="json") for c in checked.evaluation.criteria],
-            evaluator_version=f"{llm.model}|{rubric.name}-v{rubric.version}|prompt-{prompts.PROMPT_VERSION}",
+            evaluator_version=evaluator_version,
         )
     )
     try:
         db.commit()
     except IntegrityError:
         db.rollback()  # A parallel retry stored its evaluation first.
+
+
+def _ungraded(criteria: list[dict], competency: str, reason: str) -> AnswerEvaluation:
+    return AnswerEvaluation(
+        criteria=[
+            CriterionScore(name=c["name"], score=0, max_score=c["max_score"], reason=f"Not graded: {reason}.")
+            for c in criteria
+        ],
+        missing_concepts=[competency],
+        insufficient_evidence=True,
+    )
+
+
+def _insufficient_reason(
+    db: Session, evaluation: AnswerEvaluation, question: Question, answer: Answer
+) -> str | None:
+    """Why this answer cannot support a confident score, or None."""
+    if evaluation.insufficient_evidence:
+        return "the evaluator judged the answer too thin to grade with confidence"
+    if evaluation.score == 0:
+        context = db.get(InterviewSession, answer.session_id).context_json or {}
+        reference = " ".join(
+            [question.prompt, question.competency, context.get("topic", ""), *context.get("subtopics", [])]
+        )
+        if shares_no_terms(answer.text, reference):
+            return "the answer does not address the question or its topic"
+    return None
 
 
 def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
