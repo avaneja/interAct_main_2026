@@ -47,23 +47,11 @@ from app.models.enums import InputModel, SessionState, StyleStatus, ValidationSt
 from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext, StyleVerdict
 from app.services import prompts
 from app.services.question_styles import question_type_for, style_rule_problem
+from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
 STYLE_ATTEMPTS = 2
-EVALUATOR_VERSION = f"fake-rubric-{prompts.PROMPT_VERSION}"
-
-# A placeholder rubric for M1. M2 designs the real one.
-DEFAULT_RUBRIC = {
-    "name": "general",
-    "version": "m1-1",
-    "criteria": [
-        {"name": "correctness", "max_score": 3,
-         "description": "The answer is accurate and uses terms correctly."},
-        {"name": "completeness", "max_score": 2,
-         "description": "The answer covers the main points the question asks for."},
-    ],
-}
 
 
 class InterviewError(Exception):
@@ -258,18 +246,17 @@ def _ask_llm(
     )
 
 
-def _default_rubric(db: Session) -> Rubric:
-    query = select(Rubric).where(
-        Rubric.name == DEFAULT_RUBRIC["name"], Rubric.version == DEFAULT_RUBRIC["version"]
-    )
+def _rubric_row(db: Session, spec: RubricSpec) -> Rubric:
+    """The database row for a rubric version, created on first use."""
+    query = select(Rubric).where(Rubric.name == spec.name, Rubric.version == spec.version)
     rubric = db.scalar(query)
     if rubric is None:
         db.add(
             Rubric(
-                name=DEFAULT_RUBRIC["name"],
-                version=DEFAULT_RUBRIC["version"],
-                criteria_json=DEFAULT_RUBRIC["criteria"],
-                max_score=sum(c["max_score"] for c in DEFAULT_RUBRIC["criteria"]),
+                name=spec.name,
+                version=spec.version,
+                criteria_json=spec.criteria_json(),
+                max_score=spec.max_score,
             )
         )
         try:
@@ -384,7 +371,7 @@ def start(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> Que
     _confirmed_plan(session)
     next_state(session.state, Event.START)  # Fail fast before calling the LLM.
     checked = _generate_question(db, llm, session, sequence=1)
-    rubric_id = _default_rubric(db).id  # Before the lock: it may commit.
+    rubric_id = _rubric_row(db, rubric_for(checked.generated.type)).id  # Before the lock: it may commit.
 
     session = get_session(db, user, session_id, lock=True)
     _move(session, Event.START)  # Re-checked: a parallel request may have started it.
@@ -457,9 +444,15 @@ def _save_answer(
 def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
     question = db.get(Question, answer.question_id)
     rubric = db.get(Rubric, question.rubric_id)
-    criteria = [{"name": c["name"], "max_score": c["max_score"]} for c in rubric.criteria_json]
+    criteria = rubric.criteria_json
     request = prompts.evaluation_request(
-        question_prompt=question.prompt, competency=question.competency, answer=answer.text, criteria=criteria
+        question_prompt=question.prompt,
+        question_type=question.type,
+        difficulty=question.difficulty,
+        competency=question.competency,
+        answer=answer.text,
+        criteria=criteria,
+        answer_key=question.answer_key_json,
     )
 
     def matches_rubric(evaluation: AnswerEvaluation) -> None:
@@ -473,7 +466,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
             answer_id=answer.id,
             scores_json=evaluation.model_dump(mode="json", exclude={"criteria"}),
             evidence_json=[c.model_dump(mode="json") for c in evaluation.criteria],
-            evaluator_version=EVALUATOR_VERSION,
+            evaluator_version=f"{llm.model}|{rubric.name}-v{rubric.version}|prompt-{prompts.PROMPT_VERSION}",
         )
     )
     try:
@@ -497,7 +490,7 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
         return SubmitResult(session=session, next_question=None)
 
     checked = _generate_question(db, llm, session, sequence=asked + 1)
-    rubric_id = _default_rubric(db).id  # Before the lock: it may commit.
+    rubric_id = _rubric_row(db, rubric_for(checked.generated.type)).id  # Before the lock: it may commit.
     session = get_session(db, user, session_id, lock=True)
     if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:
         _add_question(db, session, checked, sequence=asked + 1, rubric_id=rubric_id)

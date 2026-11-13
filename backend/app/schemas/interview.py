@@ -138,12 +138,13 @@ class CriterionScore(LLMOutput):
 class AnswerEvaluation(LLMOutput):
     """A rubric score for one answer, as the evaluator must return it.
 
-    The totals must equal the sum of the criteria, so a model cannot state a
-    total its own criteria do not support.
+    The totals are always the sum of the criteria. A model may leave them
+    out, and they are filled in; if it states them, they must match, so it
+    cannot claim a total its own criteria do not support.
     """
 
-    score: int = Field(ge=0)
-    max_score: int = Field(gt=0)
+    score: int | None = Field(default=None, ge=0)
+    max_score: int | None = Field(default=None, gt=0)
     criteria: list[CriterionScore] = Field(min_length=1, max_length=10)
     missing_concepts: list[ShortText] = Field(default_factory=list, max_length=20)
     insufficient_evidence: bool = False
@@ -151,8 +152,11 @@ class AnswerEvaluation(LLMOutput):
     @model_validator(mode="after")
     def check_totals(self) -> Self:
         _unique_ignoring_case([c.name for c in self.criteria], "criteria names")
-        if self.max_score != sum(c.max_score for c in self.criteria):
+        max_total = sum(c.max_score for c in self.criteria)
+        total = sum(c.score for c in self.criteria)
+        if self.max_score is not None and self.max_score != max_total:
             raise ValueError("max_score must equal the sum of the criteria maximums")
-        if self.score != sum(c.score for c in self.criteria):
+        if self.score is not None and self.score != total:
             raise ValueError("score must equal the sum of the criteria scores")
+        self.max_score, self.score = max_total, total
         return self

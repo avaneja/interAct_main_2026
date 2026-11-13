@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.llm import LLMError
 from app.models import Answer, Evaluation, Question
+from app.services.rubrics import REASONING
 
 ANSWER = "A detailed answer about the topic " * 7
 
@@ -79,7 +80,7 @@ def test_a_full_interview_runs_through_the_api(client):
     assert report.status_code == 200
     summary = report.json()["summary"]
     assert summary["answered_questions"] == 5
-    assert summary["score"] == summary["max_score"] == 25
+    assert summary["score"] == summary["max_score"] == 5 * REASONING.max_score
     assert [q["sequence"] for q in summary["questions"]] == [1, 2, 3, 4, 5]
 
     detail = client.get(url(session_id)).json()

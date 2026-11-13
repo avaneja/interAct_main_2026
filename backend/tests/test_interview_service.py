@@ -9,6 +9,7 @@ from app.models import Answer, Base, Evaluation, InterviewSession, LLMCall, Ques
 from app.models.enums import AuthProvider, InputModel, SessionState, ValidationStatus
 from app.schemas import InterviewConfig, InterviewContext
 from app.services import interview as svc
+from app.services.rubrics import REASONING
 from app.services.state_machine import InvalidTransition
 
 LONG_ANSWER = "A detailed answer about the topic " * 7  # 42 words: full marks from FakeLLM.
@@ -89,7 +90,7 @@ def test_a_full_interview_runs_to_a_report(db, user, llm):
     assert result.next_question is None
     report = svc.get_report(db, user, session.id).summary_json
     assert report["answered_questions"] == 5
-    assert report["score"] == 25 and report["max_score"] == 25
+    assert report["score"] == report["max_score"] == 5 * REASONING.max_score
     assert report["ended_early"] is False
     assert set(report["competencies"]) == {"overfitting", "cross-validation"}
 
@@ -312,7 +313,7 @@ def test_an_evaluation_that_ignores_the_rubric_is_rejected(db, user, llm):
     answer_current(db, user, session, llm)  # The second attempt uses the valid default.
 
     evaluation = db.scalar(select(Evaluation))
-    assert {c["name"] for c in evaluation.evidence_json} == {"correctness", "completeness"}
+    assert [c["name"] for c in evaluation.evidence_json] == [c.name for c in REASONING.criteria]
 
 
 def test_a_failed_first_question_leaves_the_session_ready(db, user, llm):
@@ -343,8 +344,7 @@ def test_a_failed_next_question_keeps_the_score_and_retries_cleanly(db, user, ll
     valid_evaluation = FakeLLM().complete(llm.requests[0].__class__(
         purpose="evaluate_answer", system="", user="",
         hints={"answer": LONG_ANSWER, "competency": "overfitting",
-               "criteria": [{"name": "correctness", "max_score": 3},
-                            {"name": "completeness", "max_score": 2}]},
+               "criteria": [{"name": c.name, "max_score": c.max_score} for c in REASONING.criteria]},
     )).text
     llm.queue(valid_evaluation, LLMError("down"), LLMError("down"))
 
