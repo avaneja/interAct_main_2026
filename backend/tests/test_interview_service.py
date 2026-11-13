@@ -101,7 +101,7 @@ def test_mixed_questions_rotate_through_concrete_types(db, user, llm):
 
     types = [q.type for q in db.scalars(select(Question).order_by(Question.sequence))]
 
-    assert types == ["CONCEPTUAL", "DIRECT", "CASE_BASED", "SCENARIO_BASED", "APPLICATION"]
+    assert types == ["DIRECT", "CONCEPTUAL", "CASE_BASED", "SCENARIO_BASED", "APPLICATION"]
 
 
 def test_ending_early_writes_a_report_with_the_unanswered_question(db, user, llm):

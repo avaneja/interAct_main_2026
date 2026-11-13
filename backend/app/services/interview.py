@@ -40,9 +40,10 @@ from app.models import (
     Rubric,
     User,
 )
-from app.models.enums import InputModel, QuestionType, SessionState, ValidationStatus
+from app.models.enums import InputModel, SessionState, ValidationStatus
 from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext
 from app.services import prompts
+from app.services.question_styles import question_type_for
 from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
@@ -59,15 +60,6 @@ DEFAULT_RUBRIC = {
          "description": "The answer covers the main points the question asks for."},
     ],
 }
-
-# M1 placeholder mix policy for MIXED: rotate through the concrete types.
-MIX_ORDER = [
-    QuestionType.CONCEPTUAL,
-    QuestionType.DIRECT,
-    QuestionType.CASE_BASED,
-    QuestionType.SCENARIO_BASED,
-    QuestionType.APPLICATION,
-]
 
 
 class InterviewError(Exception):
@@ -302,10 +294,7 @@ def _generate_question(
     db: Session, llm: LLMClient, session: InterviewSession, sequence: int
 ) -> GeneratedQuestion:
     context, config = _confirmed_plan(session)
-    if config.question_type is QuestionType.MIXED:
-        question_type = MIX_ORDER[(sequence - 1) % len(MIX_ORDER)]
-    else:
-        question_type = config.question_type
+    question_type = question_type_for(config.question_type, sequence)
     competencies = context.subtopics or [context.topic]
     competency = competencies[(sequence - 1) % len(competencies)]
     request = prompts.question_request(
