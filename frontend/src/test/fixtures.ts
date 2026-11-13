@@ -9,6 +9,13 @@ export function makeSession(overrides: Partial<SessionView> = {}): SessionView {
     config: { question_type: 'MIXED', difficulty: 'intermediate', question_count: 5, adaptive: true, feedback_timing: 'END' },
     questions_asked: 1,
     questions_answered: 0,
+    plan: [
+      { sequence: 1, question_type: 'DIRECT', competency: 'processes' },
+      { sequence: 2, question_type: 'CONCEPTUAL', competency: 'memory' },
+      { sequence: 3, question_type: 'CASE_BASED', competency: 'processes' },
+      { sequence: 4, question_type: 'SCENARIO_BASED', competency: 'memory' },
+      { sequence: 5, question_type: 'APPLICATION', competency: 'processes' },
+    ],
     created_at: '2026-11-13T10:00:00Z',
     updated_at: '2026-11-13T10:05:00Z',
     ...overrides,

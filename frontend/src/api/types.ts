@@ -42,6 +42,12 @@ export interface InterviewConfig {
   avatar_key?: string | null
 }
 
+export interface PlannedQuestion {
+  sequence: number
+  question_type: Exclude<QuestionType, 'MIXED'>
+  competency: string
+}
+
 export interface SessionView {
   id: string
   input_model: InputModel
@@ -50,6 +56,7 @@ export interface SessionView {
   config: InterviewConfig | null
   questions_asked: number
   questions_answered: number
+  plan: PlannedQuestion[] | null
   created_at: string
   updated_at: string
 }

@@ -69,7 +69,7 @@ from app.services.evidence import (
     shares_no_terms,
     verify_evidence,
 )
-from app.services.question_styles import question_type_for, style_rule_problem
+from app.services.question_styles import competency_for, question_type_for, style_rule_problem
 from app.services.reporting import build_report
 from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
@@ -342,8 +342,7 @@ def _generate_question(
     """
     context, config = _confirmed_plan(session)
     question_type = question_type_for(config.question_type, sequence)
-    competencies = context.subtopics or [context.topic]
-    competency = competencies[(sequence - 1) % len(competencies)]
+    competency = competency_for(context.topic, context.subtopics, sequence)
     request = prompts.question_request(
         context=context,
         config=config,

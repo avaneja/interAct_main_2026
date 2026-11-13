@@ -12,7 +12,7 @@ vi.mock('../api/client', async (importOriginal) =>
 
 const mockedApi = api as unknown as MockedApi
 
-const configuring = makeSession({ state: 'CONFIGURING', config: null, questions_asked: 0 })
+const configuring = makeSession({ state: 'CONFIGURING', config: null, plan: null, questions_asked: 0 })
 
 describe('topic form rules', () => {
   it('splits subtopics on commas and new lines', () => {
@@ -90,7 +90,11 @@ describe('topic page', () => {
 describe('settings page', () => {
   it('saves the chosen settings and moves to the plan', async () => {
     mockedApi.getSession.mockResolvedValue(configuring)
-    mockedApi.setConfig.mockResolvedValue(makeSession({ state: 'CONFIGURING' }))
+    mockedApi.setConfig.mockImplementation(async () => {
+      // Like the server: once saved, the session has its configuration and plan.
+      mockedApi.getSession.mockResolvedValue(makeSession({ state: 'CONFIGURING' }))
+      return makeSession({ state: 'CONFIGURING' })
+    })
     const user = userEvent.setup()
     const router = renderApp('/sessions/s-1/configure')
 
@@ -100,10 +104,11 @@ describe('settings page', () => {
     await user.click(screen.getByRole('checkbox'))
     await user.click(screen.getByRole('button', { name: 'Review the plan' }))
 
+    expect(await screen.findByRole('heading', { name: 'Review your interview plan' })).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/sessions/s-1/plan')
     expect(mockedApi.setConfig).toHaveBeenCalledWith('s-1', {
       question_type: 'CASE_BASED', difficulty: 'advanced', question_count: 10, adaptive: false, feedback_timing: 'END',
     })
-    expect(router.state.location.pathname).toBe('/sessions/s-1/plan')
   })
 
   it('sends a session that is past setup to where it continues', async () => {

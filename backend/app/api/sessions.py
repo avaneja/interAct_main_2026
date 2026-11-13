@@ -3,15 +3,35 @@
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import ValidationError
 
 from app.api.deps import LLM, CurrentUser, DbSession
 from app.models import InterviewSession
 from app.models.enums import SessionState
 from app.schemas import InterviewConfig, InterviewContext, QuestionView
-from app.schemas.api import AnswerResult, AnswerSubmit, ReportView, SessionCreate, SessionView
+from app.schemas.api import AnswerResult, AnswerSubmit, PlannedQuestion, ReportView, SessionCreate, SessionView
 from app.services import interview as svc
+from app.services.question_styles import competency_for, mix_plan
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
+
+
+def _plan(session: InterviewSession) -> list[PlannedQuestion] | None:
+    if not session.context_json or not session.config_json:
+        return None
+    try:
+        context = InterviewContext.model_validate(session.context_json)
+        config = InterviewConfig.model_validate(session.config_json)
+    except ValidationError:
+        return None
+    return [
+        PlannedQuestion(
+            sequence=sequence,
+            question_type=question_type,
+            competency=competency_for(context.topic, context.subtopics, sequence),
+        )
+        for sequence, question_type in enumerate(mix_plan(config.question_type, config.question_count), start=1)
+    ]
 
 
 def _view(db: DbSession, session: InterviewSession) -> SessionView:
@@ -24,6 +44,7 @@ def _view(db: DbSession, session: InterviewSession) -> SessionView:
         config=session.config_json,
         questions_asked=asked,
         questions_answered=answered,
+        plan=_plan(session),
         created_at=session.created_at,
         updated_at=session.updated_at,
     )

@@ -289,3 +289,27 @@ def test_a_document_context_on_a_topic_session_is_422(client):
 
     assert response.status_code == 422
     assert "TOPIC interview" in response.json()["detail"]
+
+
+def test_the_session_shows_the_planned_style_and_focus_of_each_question(client):
+    session_id = new_session(client)
+    assert client.get(url(session_id)).json()["plan"] is None
+
+    client.put(url(session_id, "context"), json=CONTEXT)
+    assert client.get(url(session_id)).json()["plan"] is None
+
+    plan = client.put(url(session_id, "config"), json={**CONFIG, "question_type": "MIXED", "question_count": 10}).json()["plan"]
+
+    assert [p["sequence"] for p in plan] == list(range(1, 11))
+    assert [p["question_type"] for p in plan[:5]] == ["DIRECT", "CONCEPTUAL", "CASE_BASED", "SCENARIO_BASED", "APPLICATION"]
+    assert [p["competency"] for p in plan[:4]] == ["processes", "memory", "scheduling", "processes"]
+
+
+def test_the_plan_matches_the_questions_actually_asked(client):
+    session_id = ready_session(client)
+    plan = client.get(url(session_id)).json()["plan"]
+
+    question = client.post(url(session_id, "start")).json()
+
+    assert (question["type"], question["competency"]) == (plan[0]["question_type"], plan[0]["competency"])
+

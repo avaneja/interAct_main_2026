@@ -120,3 +120,9 @@ def question_type_for(config_type: Q, sequence: int) -> Q:
 
 def mix_plan(config_type: Q, question_count: int) -> list[Q]:
     return [question_type_for(config_type, sequence) for sequence in range(1, question_count + 1)]
+
+
+def competency_for(topic: str, subtopics: list[str], sequence: int) -> str:
+    """The focus of question `sequence`: subtopics in turn, or the whole topic if there are none."""
+    competencies = subtopics or [topic]
+    return competencies[(sequence - 1) % len(competencies)]
