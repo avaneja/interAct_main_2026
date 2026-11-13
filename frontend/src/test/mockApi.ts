@@ -1,10 +1,12 @@
-import { vi } from 'vitest'
-import { api } from '../api/client'
+import { vi, type Mock } from 'vitest'
+import type { api } from '../api/client'
 
 /**
- * Use in a test file as:
- *   vi.mock('../api/client', mockApiModule)
- * Every api function becomes a vi.fn(); ApiError stays real.
+ * Replace every api function with a vi.fn(), keeping the real ApiError.
+ * vi.mock is hoisted above imports, so load this helper inside the factory:
+ *
+ *   vi.mock('../api/client', async (importOriginal) =>
+ *     (await import('../test/mockApi')).mockApiModule(importOriginal))
  */
 export async function mockApiModule(importOriginal: () => Promise<unknown>) {
   const actual = (await importOriginal()) as typeof import('../api/client')
@@ -12,4 +14,4 @@ export async function mockApiModule(importOriginal: () => Promise<unknown>) {
   return { ...actual, api: mocked }
 }
 
-export const mockedApi = api as unknown as { [K in keyof typeof api]: ReturnType<typeof vi.fn> }
+export type MockedApi = { [K in keyof typeof api]: Mock }
