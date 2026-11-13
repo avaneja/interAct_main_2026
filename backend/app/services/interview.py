@@ -61,6 +61,7 @@ from app.schemas import (
 from app.services import prompts
 from app.services.evidence import EvidenceCheck, non_answer_reason, shares_no_terms, verify_evidence
 from app.services.question_styles import question_type_for, style_rule_problem
+from app.services.reporting import build_report
 from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
 
@@ -586,48 +587,7 @@ def finish(db: Session, user: User, session_id: uuid.UUID) -> InterviewSession:
 
 
 def _write_report(db: Session, session: InterviewSession, *, ended_early: bool) -> None:
-    """Build the report from stored, validated evaluations only. M2 adds LLM feedback."""
-    _, config = _confirmed_plan(session)
-    entries = []
-    competencies: dict[str, dict[str, int]] = {}
-    for question in _questions(db, session.id):
-        answer = db.scalar(select(Answer).where(Answer.question_id == question.id))
-        evaluation = (
-            db.scalar(select(Evaluation).where(Evaluation.answer_id == answer.id)) if answer else None
-        )
-        entry = {
-            "sequence": question.sequence,
-            "type": question.type.value,
-            "competency": question.competency,
-            "prompt": question.prompt,
-            "answer": answer.text if answer else None,
-            "evaluation": None,
-            "answer_key": question.answer_key_json if answer else None,
-        }
-        if evaluation is not None:
-            entry["evaluation"] = {**evaluation.scores_json, "criteria": evaluation.evidence_json}
-            totals = competencies.setdefault(question.competency, {"score": 0, "max_score": 0, "questions": 0})
-            totals["score"] += evaluation.scores_json["score"]
-            totals["max_score"] += evaluation.scores_json["max_score"]
-            totals["questions"] += 1
-        entries.append(entry)
-
-    scored = [e["evaluation"] for e in entries if e["evaluation"]]
-    db.add(
-        Report(
-            session_id=session.id,
-            summary_json={
-                "label": "Rubric-based practice estimate",
-                "score": sum(e["score"] for e in scored),
-                "max_score": sum(e["max_score"] for e in scored),
-                "planned_questions": config.question_count,
-                "answered_questions": len(scored),
-                "ended_early": ended_early,
-                "competencies": competencies,
-                "questions": entries,
-            },
-        )
-    )
+    db.add(Report(session_id=session.id, summary_json=build_report(db, session, ended_early=ended_early)))
 
 
 def get_report(db: Session, user: User, session_id: uuid.UUID) -> Report:

@@ -118,6 +118,11 @@ class FakeLLM:
                 "criteria": criteria,
                 "missing_concepts": [] if share == 1 else [hints["competency"]],
                 "insufficient_evidence": words == 0,
+                "better_answer_outline": [
+                    f"Define {hints['competency']} precisely.",
+                    "Give a concrete example.",
+                    "Weigh one trade-off.",
+                ],
             }
         raise LLMError(f"FakeLLM has no default reply for purpose '{request.purpose}'")
 

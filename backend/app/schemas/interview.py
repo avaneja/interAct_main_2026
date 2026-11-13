@@ -148,6 +148,7 @@ class AnswerEvaluation(LLMOutput):
     criteria: list[CriterionScore] = Field(min_length=1, max_length=10)
     missing_concepts: list[ShortText] = Field(default_factory=list, max_length=20)
     insufficient_evidence: bool = False
+    better_answer_outline: list[LongText] = Field(default_factory=list, max_length=6)
 
     @model_validator(mode="after")
     def check_totals(self) -> Self:

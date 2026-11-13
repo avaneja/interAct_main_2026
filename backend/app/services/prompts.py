@@ -12,7 +12,7 @@ from app.models.enums import Difficulty, QuestionType
 from app.schemas import InterviewConfig, InterviewContext
 from app.services.question_styles import DIFFICULTY_GUIDE, STYLES
 
-PROMPT_VERSION = "m2-2"
+PROMPT_VERSION = "m2-3"
 
 QUESTION_SYSTEM = (
     "You write one question for a practice interview. "
@@ -145,6 +145,7 @@ def evaluation_request(
         "{\n"
         f'  "criteria": [\n{reply_criteria}\n  ],\n'
         '  "missing_concepts": [<concepts a strong answer would include that this one lacks>],\n'
+        '  "better_answer_outline": [<2 to 5 short points a strong answer to this question would cover>],\n'
         '  "insufficient_evidence": <true if the answer is empty, off-topic or too short to grade '
         "with confidence, otherwise false>\n"
         "}"
