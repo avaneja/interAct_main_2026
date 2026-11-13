@@ -12,6 +12,9 @@ rules this module enforces:
 - When the LLM fails or returns invalid output after a limited number of
   tries, no score is written; resubmitting the same answer retries.
 - Every LLM reply is stored raw in llm_calls, apart from the validated rows.
+- Scores stay within the rubric: every criterion must match the rubric's name
+  and maximum, and totals are computed. Evidence quotes not found in the
+  answer are removed and counted.
 - A question that misses its requested style is regenerated once, then kept
   and flagged with the reason.
 
@@ -46,6 +49,7 @@ from app.core.config import get_settings
 from app.models.enums import InputModel, SessionState, StyleStatus, ValidationStatus
 from app.schemas import AnswerEvaluation, GeneratedQuestion, InterviewConfig, InterviewContext, StyleVerdict
 from app.services import prompts
+from app.services.evidence import verify_evidence
 from app.services.question_styles import question_type_for, style_rule_problem
 from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
@@ -461,11 +465,16 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
             raise ValueError("the evaluation does not score exactly the rubric's criteria")
 
     evaluation = _ask_llm(db, llm, request, AnswerEvaluation, session_id=answer.session_id, check=matches_rubric)
+    # Quotes not found in the answer are dropped, so only the candidate's own words are shown.
+    checked = verify_evidence(evaluation, answer.text)
     db.add(
         Evaluation(
             answer_id=answer.id,
-            scores_json=evaluation.model_dump(mode="json", exclude={"criteria"}),
-            evidence_json=[c.model_dump(mode="json") for c in evaluation.criteria],
+            scores_json={
+                **checked.evaluation.model_dump(mode="json", exclude={"criteria"}),
+                "evidence": {"quotes_verified": checked.verified, "quotes_removed": len(checked.removed)},
+            },
+            evidence_json=[c.model_dump(mode="json") for c in checked.evaluation.criteria],
             evaluator_version=f"{llm.model}|{rubric.name}-v{rubric.version}|prompt-{prompts.PROMPT_VERSION}",
         )
     )
