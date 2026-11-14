@@ -9,7 +9,7 @@ Each provider sends the user back to InterAct at a fixed address. Register exact
 | Where InterAct runs | Google callback | GitHub callback |
 |---|---|---|
 | Local development | `http://localhost:5173/api/v1/auth/google/callback` | `http://localhost:5173/api/v1/auth/github/callback` |
-| Deployed demo (M9) | `<PUBLIC_URL>/api/v1/auth/google/callback` | `<PUBLIC_URL>/api/v1/auth/github/callback` |
+| Deployed demo (M10) | `<PUBLIC_URL>/api/v1/auth/google/callback` | `<PUBLIC_URL>/api/v1/auth/github/callback` |
 
 The first part must match `PUBLIC_URL` in `backend/.env` (default `http://localhost:5173`, the address of the frontend in development).
 
@@ -43,4 +43,4 @@ GITHUB_CLIENT_SECRET=...
 - Never commit them, paste them into chats or issues, or put them in the frontend. The backend never sends them to the browser and never prints them.
 - A provider without both values is simply not offered on the sign-in page.
 - Each teammate can register their own development apps, or the team can share one through a password manager.
-- The deployed demo needs its own apps with the deployed callback addresses, set as secrets on the hosting platform (M9).
+- The deployed demo needs its own apps with the deployed callback addresses, set as secrets on the hosting platform (M10).

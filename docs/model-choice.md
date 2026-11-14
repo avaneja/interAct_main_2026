@@ -2,7 +2,7 @@
 
 **Decision:** InterAct uses **Llama 3.1 8B** (`interact-llama3.1:8b`, 8K context) as its local model. It is the default `LLM_MODEL`. Qwen3 8B stays available for comparison.
 
-Decided 2026-11-14, after the comparison below. Revisit it when the prompts change, when a hosted model is chosen for the demo (M9), or when the human-rated study (README section 8) can measure grading quality properly.
+Decided 2026-11-14, after the comparison below. Revisit it when the prompts change, when a hosted model is chosen for the demo (M10), or when the human-rated study (README section 8) can measure grading quality properly.
 
 ## Why Llama 3.1
 

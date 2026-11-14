@@ -46,13 +46,15 @@ flowchart TD
     H --> I[Shared configuration: question type, difficulty, count]
     I --> J[Preview and confirm interview plan]
     J --> CHK[Pre-call check: camera, microphone, consent]
-    CHK --> K[Interviewer asks the first question aloud]
+    CHK --> W[Greeting and warm-up: tell me about yourself]
+    W --> K[Interviewer asks a question aloud]
     K --> L[Candidate answers by voice or typing]
-    L --> M[Evaluate answer against rubric]
-    M --> N{More questions?}
-    N -->|Yes| O[Select next question or adaptive follow-up]
-    O --> L
-    N -->|No| P[Aggregate scores and evidence]
+    L --> M[Interviewer reacts to the answer]
+    M --> N{Follow-up, next question or done?}
+    N -->|Follow-up| L
+    N -->|Next question| K
+    N -->|Done| CL[Closing: the candidate's questions, then goodbye]
+    CL --> P[Score each question with its follow-ups]
     P --> Q[Final feedback report and saved history]
 ```
 
@@ -133,15 +135,16 @@ Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP 
 
 1. **Pre-call check.** The candidate sees their camera and microphone, tests both, and gives consent for focus tracking. They can turn the camera off (no focus data is collected) or choose to type answers instead of speaking. The screen says plainly what is processed and where (see §2.4.1).
 2. **The call screen.** Like a video call: the interviewer's tile (a 3D avatar) and the candidate's camera tile, live captions, the question number, a timer, and mute, captions and end-call controls. The interview runs in full screen.
-3. The interviewer **asks one question at a time aloud**, with lip-synced speech, and the question text stays visible in the captions.
-4. The candidate **answers by speaking**; the transcript appears live. They finish by pressing **Done** (or after a few seconds of silence), can correct recognition mistakes in the transcript, and send it. Typing is always available instead.
-5. The evaluator returns structured scores, evidence from the answer, missing concepts, and uncertainty. With end-of-interview feedback (the default), the interviewer only acknowledges the answer and moves on; scores appear in the report.
-6. The interview state is updated with covered competencies, difficulty, question count, and recent performance.
-7. The adaptive policy selects the next subtopic and question intent. The generator creates the next question within the **user-selected style**. The next question is prepared while the candidate is still answering where possible, so the interviewer does not stall.
+3. **Warm-up.** The interviewer greets the candidate by first name, says who it is and how many questions are coming, and asks them to tell it a little about themselves. Its reply picks up what they said. This is never scored.
+4. The interviewer **asks one question at a time aloud**, with lip-synced speech, and the question text stays visible in the captions. The candidate can send an answer only once the question has been asked.
+5. The candidate **answers by speaking**; the transcript appears live. They finish by pressing **Done** (or after a few seconds of silence), can correct recognition mistakes in the transcript, and send it. Typing is always available instead.
+6. **The interviewer reacts like a person.** A short listening sound plays at once ("Okay."), then the interviewer reacts in a sentence or two to what the candidate actually said, honestly and without giving the answer or a score, and either asks a **follow-up** about the same question (when the answer is vague or incomplete, or invites a deeper question; at most two per question) or leads into the next question with a short transition. Requests for the answer or a score are politely declined.
+7. The next planned question, in the **user-selected style**, is written in the background while the candidate is still answering, so moving on waits only for the interviewer's reaction.
 8. Repeat until the configured question budget is exhausted or the candidate ends the call. A paused call resumes at the same question.
-9. Aggregate the rubric scores and focus metrics and generate the final report.
+9. **Closing.** The interviewer asks whether the candidate has any questions and answers them honestly as a practice interviewer (no invented company, salary or hiring outcome), then says goodbye.
+10. **Scoring at the end.** Each planned question is scored together with its follow-ups, and the report is written. Answers are not scored during the call, so the conversation never waits for scoring.
 
-**Important:** Follow-up questions count toward the configured question budget unless the product explicitly offers a separate follow-up allowance. The MVP uses the same question budget in fixed and adaptive experiments.
+**Important:** Follow-up questions do **not** count toward the configured question budget: the budget counts planned questions, and each planned question is scored together with its follow-ups. The MVP uses the same question budget in fixed and adaptive experiments.
 
 ### 2.4.1 Focus and delivery signals
 
@@ -434,7 +437,7 @@ All session/document/job endpoints must authorize access to the resource owner. 
 
 **Preset avatars:** Presets are a static list of 3D interviewer models (GLB files with a voice each) in the application, identified by a key, so the MVP needs no avatar tables. `users.default_avatar_key` stores the saved choice.
 
-**Focus and delivery metrics:** Stored per answer as a small set of numbers (for example `looking_away_ratio`, `tab_switches`, `words_per_minute`), only when the candidate consented. No media is stored. The exact columns are fixed in M6.
+**Focus and delivery metrics:** Stored per answer as a small set of numbers (for example `looking_away_ratio`, `tab_switches`, `words_per_minute`), only when the candidate consented. No media is stored. The exact columns are fixed in M7.
 
 Store minimal personal information. Set retention/deletion rules for uploaded files and answers. Research datasets should be synthetic or explicitly consented and de-identified where appropriate.
 
@@ -464,7 +467,7 @@ Do not claim that the adaptive system is superior until experimental results sup
 
 Originally planned as 15 days (about 30–60 hours). Each milestone ends with passing tests and a reviewable pull request.
 
-**Scope change (2026-11-14):** after M4, the interview changed from a typed question-and-answer page to a live, call-style interview. M5 and M6 are new; the earlier M5–M7 became M7–M9. Everything built in M1–M4 (engine, scoring, report, sign-in) is reused unchanged: the call only changes how questions are asked and answers are given.
+**Scope change (2026-11-14):** after M4, the interview changed from a typed question-and-answer page to a live, call-style interview. M5 to M7 are new; the earlier M5–M7 became M8–M10. M6 was added on 2026-11-15, after comparing the call with a real AI interview: the interviewer must react to answers, ask follow-ups and hold a warm-up and closing. Everything built in M1–M4 (engine, scoring, report, sign-in) is reused unchanged: the call only changes how questions are asked and answers are given.
 
 | # | Milestone | Exit criteria |
 |---|---|---|
@@ -474,10 +477,11 @@ Originally planned as 15 days (about 30–60 hours). Each milestone ends with pa
 | **M3** | Frontend flow: topic input → configuration → interview → report | End-to-end interview in the browser (Model A, no clarification yet) |
 | **M4** | Google and GitHub sign-in | Only the owner can access their sessions |
 | **M5** | Call-style interview with voice: pre-call check, call screen, 3D interviewer (TalkingHead) speaking each question (HeadTTS), spoken answers with live captions and a typed fallback | A full Model A interview held as a spoken call in Chrome |
-| **M6** | Camera and focus: consent, camera tile, eye contact and face visibility (MediaPipe), tab-switch and full-screen detection, speaking pace and filler words, **Delivery and focus** report section | The report shows focus and delivery metrics; no media leaves the browser |
-| **M7** | Model A clarification conversation, held by the interviewer before the call's first question | Skippable 2–4 question clarification produces a confirmed context |
-| **M8** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
-| **M9** | Adaptive follow-ups, choice of preset interviewer, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
+| **M6** | Conversational interviewer: a reaction to every answer, up to two follow-ups per question, polite refusal of requests for the answer or a score, warm-up and closing, concrete subtopics for vague topics, scoring at the end of the interview (each question with its follow-ups), the next question written while the candidate answers | The call follows a real interview's shape, and no answer waits for scoring |
+| **M7** | Camera and focus: consent, camera tile, eye contact and face visibility (MediaPipe), tab-switch and full-screen detection, speaking pace and filler words, **Delivery and focus** report section | The report shows focus and delivery metrics; no media leaves the browser |
+| **M8** | Model A clarification conversation, held by the interviewer before the call's first question | Skippable 2–4 question clarification produces a confirmed context |
+| **M9** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
+| **M10** | Adaptive question selection (on top of the M6 follow-ups), choice of preset interviewer, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
 
 **Scope protection:** The MVP interview is a call-style practice interview with spoken questions and answers, a 3D interviewer, and focus signals computed in the browser. Out of scope for the MVP: photo-realistic or generated avatars, paid avatar or voice services, emotion or personality detection, storing or uploading video, audio or screen contents, on-device speech recognition, arbitrary code execution, custom model training, and DOCX/PPTX parsing. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
 
