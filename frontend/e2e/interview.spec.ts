@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-// M3 "done when": a Model A interview runs end to end in the browser.
+// A Model A interview runs end to end in the browser, as a call answered by typing.
 // Runs against the real backend with the fake LLM (see playwright.config.ts).
 
 const ANSWER =
@@ -42,27 +42,37 @@ test('a topic interview runs from the home page to the report', async ({ page })
   await expect(page).toHaveURL(/\/sessions\/[^/]+\/interview$/)
   const interviewUrl = page.url()
 
+  // The call lobby: answer by typing, then join.
+  const join = async () => {
+    await expect(page.getByRole('heading', { name: 'Ready to join?' })).toBeVisible()
+    await page.getByRole('radio', { name: 'Type my answers' }).check()
+    await page.getByRole('button', { name: 'Join interview' }).click()
+  }
+  await join()
+  await expect(page.getByRole('toolbar', { name: 'Call controls' })).toBeVisible()
+
   for (let sequence = 1; sequence <= 5; sequence++) {
-    await expect(page.getByText(`Question ${sequence} of 5`)).toBeVisible()
+    await expect(page.getByText(`Question ${sequence} of 5`, { exact: true })).toBeVisible()
     const answer = page.getByLabel('Your answer')
 
     if (sequence === 2) {
-      // A reload mid-answer keeps the draft.
+      // A reload mid-answer reopens the lobby, and the typed draft is still there after joining.
       await answer.fill('Half of my answer')
       await page.reload()
+      await join()
       await expect(page.getByLabel('Your answer')).toHaveValue('Half of my answer')
     }
 
     if (sequence === 3) {
-      // Pause hides the question; resume brings it back.
-      await page.getByRole('button', { name: 'Pause' }).click()
+      // Pausing shows the paused panel; resuming asks the same question again.
+      await page.getByRole('button', { name: 'Pause interview' }).click()
       await expect(page.getByRole('heading', { name: 'Interview paused' })).toBeVisible()
       await page.getByRole('button', { name: 'Resume interview' }).click()
-      await expect(page.getByText('Question 3 of 5')).toBeVisible()
+      await expect(page.getByText('Question 3 of 5', { exact: true })).toBeVisible()
     }
 
     await page.getByLabel('Your answer').fill(ANSWER)
-    await page.getByRole('button', { name: 'Submit answer' }).click()
+    await page.getByRole('button', { name: 'Send answer' }).click()
   }
 
   // The last answer opens the report.

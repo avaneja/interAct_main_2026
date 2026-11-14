@@ -39,7 +39,7 @@ describe('plan page', () => {
 
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Confirm and start' }))
 
-    expect(await screen.findByRole('heading', { name: 'What is a process?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ready to join?' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/sessions/s-1/interview')
     expect(mockedApi.confirmPlan).toHaveBeenCalledWith('s-1')
     expect(mockedApi.start).toHaveBeenCalledWith('s-1')

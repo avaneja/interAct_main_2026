@@ -34,12 +34,21 @@ export function avatarSpeaker(voice: Voice, interviewer: () => InterviewerHandle
   }
 }
 
+const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean)
+
 /** The browser's built-in voice, used when the neural voice or the 3D interviewer cannot run. */
 export function browserSpeaker(synthesis: SpeechSynthesis = window.speechSynthesis): Speaker {
   return {
     lipSync: false,
     speak(text, onWord) {
       return new Promise((resolve) => {
+        // Some browsers never report the end of speech (for example with no voices installed),
+        // so the call moves on after about twice the time the line should take.
+        const safety = window.setTimeout(resolve, Math.max(4000, wordsIn(text).length * 1000))
+        const finish = () => {
+          window.clearTimeout(safety)
+          resolve()
+        }
         const utterance = new SpeechSynthesisUtterance(text)
         utterance.lang = 'en-US'
         utterance.onboundary = (event) => {
@@ -48,8 +57,8 @@ export function browserSpeaker(synthesis: SpeechSynthesis = window.speechSynthes
           const word = event.charLength ? rest.slice(0, event.charLength) : rest.split(/\s/)[0]
           if (word) onWord(word)
         }
-        utterance.onend = () => resolve()
-        utterance.onerror = () => resolve()
+        utterance.onend = finish
+        utterance.onerror = finish
         synthesis.speak(utterance)
       })
     },
@@ -62,4 +71,35 @@ export function browserSpeaker(synthesis: SpeechSynthesis = window.speechSynthes
 
 export function canUseBrowserVoice(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window
+}
+
+/**
+ * No sound: the words appear in the captions at speaking pace. Used when no
+ * voice can run, and in browser tests, which should not download the voice.
+ */
+export function captionSpeaker(wordsPerMinute = 180): Speaker {
+  let timers: number[] = []
+  const waiting = new Set<() => void>()
+  return {
+    lipSync: false,
+    speak(text, onWord) {
+      return new Promise((resolve) => {
+        const words = wordsIn(text)
+        const step = 60_000 / wordsPerMinute
+        words.forEach((word, index) => timers.push(window.setTimeout(() => onWord?.(word), index * step)))
+        const finish = () => {
+          waiting.delete(finish)
+          resolve()
+        }
+        waiting.add(finish)
+        timers.push(window.setTimeout(finish, words.length * step))
+      })
+    },
+    prepare() {},
+    stop() {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      timers = []
+      waiting.forEach((finish) => finish())
+    },
+  }
 }

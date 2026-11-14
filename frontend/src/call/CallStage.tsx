@@ -124,9 +124,11 @@ export interface CallStageProps {
 }
 
 /**
- * The video-call layout. In the lobby the two tiles sit beside the pre-call
- * panel; in the call the interviewer fills the stage, the candidate's camera
- * is a small tile in the corner, and captions and controls sit below.
+ * The video-call layout: the interviewer fills the stage, the candidate's
+ * camera is a small tile in its corner, and the panel sits beside them (the
+ * pre-call check in the lobby, the question and answer in the call). In the
+ * call, captions, the interviewer's status and the controls are added; the
+ * tiles stay mounted, so nothing reloads on joining.
  */
 export default function CallStage({
   mode,
@@ -148,14 +150,14 @@ export default function CallStage({
   return (
     <div
       ref={stageRef ?? fallbackRef}
-      className={inCall ? 'flex flex-col gap-3 bg-slate-950 data-[full]:h-screen data-[full]:p-4' : 'grid gap-4 lg:grid-cols-[1.4fr_1fr]'}
+      className="flex flex-col gap-3 bg-slate-950 data-[full]:h-screen data-[full]:p-4"
       data-full={fullScreen || undefined}
     >
       {inCall && header}
-      <div className={inCall ? 'grid min-h-0 flex-1 gap-3 lg:grid-cols-[1fr_22rem]' : 'space-y-3'}>
-        <div className={inCall ? 'relative aspect-video min-h-0 w-full lg:aspect-auto lg:h-[min(70vh,40rem)]' : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-1'}>
-          <div className={inCall ? 'h-full w-full' : 'aspect-video'}>{interviewer}</div>
-          <div className={inCall ? 'absolute right-3 top-3 aspect-video w-32 shadow-lg sm:w-44' : 'aspect-video'}>{self}</div>
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="relative aspect-video w-full lg:aspect-auto lg:h-[min(70vh,40rem)]">
+          <div className="h-full w-full">{interviewer}</div>
+          <div className="absolute right-3 top-3 aspect-video w-32 shadow-lg sm:w-48">{self}</div>
           {inCall && activity !== 'idle' && (
             <p className="absolute left-3 top-3 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-medium text-white" role="status">
               {ACTIVITY_LABEL[activity]}

@@ -21,6 +21,9 @@ export default defineConfig({
     // Uses the installed Google Chrome, so no browser download is needed.
     channel: 'chrome',
     headless: true,
+    // A fake camera and microphone, already allowed, for the call lobby.
+    permissions: ['camera', 'microphone'],
+    launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
     trace: 'retain-on-failure',
   },
   webServer: [
@@ -37,7 +40,8 @@ export default defineConfig({
     },
     {
       command: `npx vite --host 127.0.0.1 --port ${FRONTEND_PORT} --strictPort`,
-      env: { BACKEND_URL: `http://127.0.0.1:${BACKEND_PORT}` },
+      // The interviewer speaks in captions only, very fast: no voice model download.
+      env: { BACKEND_URL: `http://127.0.0.1:${BACKEND_PORT}`, VITE_CALL_VOICE: 'captions', VITE_CALL_WPM: '6000' },
       url: `http://127.0.0.1:${FRONTEND_PORT}`,
       reuseExistingServer: false,
       timeout: 60_000,

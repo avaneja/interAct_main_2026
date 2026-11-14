@@ -1,7 +1,7 @@
 import type { SpeechAudio } from '@met4citizen/talkinghead'
 import { describe, expect, it, vi } from 'vitest'
 import type { InterviewerHandle } from './Interviewer'
-import { avatarSpeaker, browserSpeaker } from './speaker'
+import { avatarSpeaker, browserSpeaker, captionSpeaker } from './speaker'
 import type { Voice } from './voice'
 
 const SPEECH = [{ audio: {} as AudioBuffer, words: ['Hi'], wtimes: [0], wdurations: [100] }]
@@ -93,5 +93,55 @@ describe('speaking with the browser voice', () => {
 
     expect(synthesis.cancel).toHaveBeenCalled()
     expect(speaker.lipSync).toBe(false)
+  })
+})
+
+describe('speaking in captions only', () => {
+  it('shows each word at speaking pace and finishes after the last', async () => {
+    vi.useFakeTimers()
+    const words: string[] = []
+    let finished = false
+
+    const speaking = captionSpeaker(120).speak('What is a process?', (word) => words.push(word)).then(() => (finished = true))
+    // 120 words a minute: one word every 500 ms.
+    await vi.advanceTimersByTimeAsync(900)
+    expect(words).toEqual(['What', 'is'])
+    expect(finished).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1100)
+    await speaking
+    expect(words).toEqual(['What', 'is', 'a', 'process?'])
+    expect(finished).toBe(true)
+    vi.useRealTimers()
+  })
+
+  it('stops at once', async () => {
+    const speaker = captionSpeaker()
+    const words: string[] = []
+
+    const speaking = speaker.speak('A long line of words', (word) => words.push(word))
+    speaker.stop()
+    await speaking
+
+    expect(words).toEqual([])
+  })
+})
+
+describe('a browser voice that never finishes', () => {
+  it('moves on after a safety timeout', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance)
+    const synthesis = { speak: vi.fn(), cancel: vi.fn() } as unknown as SpeechSynthesis
+    let finished = false
+
+    const speaking = browserSpeaker(synthesis).speak('Hi there').then(() => (finished = true))
+    await vi.advanceTimersByTimeAsync(3999)
+    expect(finished).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await speaking
+
+    expect(finished).toBe(true)
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 })

@@ -57,8 +57,8 @@ describe('resuming an interview', () => {
 
     await userEvent.setup().click(await screen.findByRole('link', { name: 'Resume' }))
 
-    expect(await screen.findByRole('heading', { name: 'Interview paused' })).toBeInTheDocument()
-    expect(screen.getByText('2 of 5 questions answered. Your progress is saved.')).toBeInTheDocument()
+    // A paused interview reopens in the call lobby; joining resumes it.
+    expect(await screen.findByRole('heading', { name: 'Ready to join?' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/sessions/s-1/interview')
   })
 })

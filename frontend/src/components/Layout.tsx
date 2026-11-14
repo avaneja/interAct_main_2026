@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet, useMatch } from 'react-router'
 import AuthProvider from '../auth/AuthProvider'
 import { useAuth } from '../auth/context'
 
@@ -58,11 +58,13 @@ function Account() {
 }
 
 export default function Layout() {
+  // The interview call needs room for the interviewer and the answer panel side by side.
+  const wide = useMatch('/sessions/:id/interview') !== null
   return (
     <AuthProvider>
       <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
         <header className="border-b border-slate-800">
-          <nav className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 px-4 py-3">
+          <nav className={`mx-auto flex ${wide ? 'max-w-6xl' : 'max-w-4xl'} flex-wrap items-center justify-between gap-4 px-4 py-3`}>
             <Link to="/" className="text-lg font-bold tracking-tight text-white">
               InterAct
             </Link>
@@ -77,7 +79,7 @@ export default function Layout() {
             </div>
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
+        <main className={`mx-auto w-full flex-1 px-4 py-8 ${wide ? 'max-w-6xl' : 'max-w-4xl'}`}>
           <Outlet />
         </main>
       </div>

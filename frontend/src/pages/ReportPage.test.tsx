@@ -57,7 +57,7 @@ describe('report page', () => {
     mockedApi.currentQuestion.mockResolvedValue(makeQuestion())
     const router = renderApp('/sessions/s-1/report')
 
-    expect(await screen.findByRole('heading', { name: 'What is a process?' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ready to join?' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/sessions/s-1/interview')
   })
 })
