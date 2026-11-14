@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card } from '../components/ui'
+import { loadDraft, saveDraft } from '../lib/drafts'
 import { inputClass } from '../lib/styles'
 import { createTranscriber, describeRecognitionProblem, type RecognitionProblem, type Transcriber } from './recognition'
 
@@ -14,6 +15,9 @@ const join = (...parts: string[]) =>
     .join(' ')
 
 export interface AnswerPanelProps {
+  questionId: string
+  /** Chosen in the lobby. When typing, the answer box is shown from the start. */
+  mode: 'speak' | 'type'
   interviewerName: string
   questionNumber: number
   questionCount: number
@@ -31,11 +35,14 @@ export interface AnswerPanelProps {
 }
 
 /**
- * The candidate's side of a question when answering by voice: the live
- * transcript while they speak, then a review where they can correct
- * recognition mistakes before sending.
+ * The candidate's side of a question. By voice: the live transcript while
+ * they speak, then a review where they can correct recognition mistakes
+ * before sending. By typing: an answer box, saved in the browser as they
+ * type. A spoken answer can switch to typing at any point.
  */
 export default function AnswerPanel({
+  questionId,
+  mode,
   interviewerName,
   questionNumber,
   questionCount,
@@ -49,17 +56,22 @@ export default function AnswerPanel({
   silenceMs = SILENCE_MS,
   makeTranscriber = createTranscriber,
 }: AnswerPanelProps) {
-  const [phase, setPhase] = useState<'answering' | 'review'>('answering')
+  // A saved draft (typed, or a reviewed transcript before a reload) goes straight to the answer box.
+  const [saved] = useState(() => loadDraft(questionId))
+  const [typing, setTyping] = useState(mode === 'type')
+  const [phase, setPhase] = useState<'answering' | 'review'>(mode === 'type' || saved ? 'review' : 'answering')
   const [heard, setHeard] = useState({ confirmed: '', pending: '' })
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(saved)
   const [problem, setProblem] = useState<RecognitionProblem | null>(null)
   const latest = useRef(heard)
   const caption = useRef(onCaption)
 
   const review = useCallback(() => {
-    setDraft(join(latest.current.confirmed, latest.current.pending))
+    const text = join(latest.current.confirmed, latest.current.pending)
+    setDraft(text)
+    saveDraft(questionId, text)
     setPhase('review')
-  }, [])
+  }, [questionId])
 
   const transcriber = useRef<Transcriber | null>(null)
 
@@ -86,7 +98,7 @@ export default function AnswerPanel({
   })
 
   const spoken = join(heard.confirmed, heard.pending)
-  const listening = canListen && microphoneOn && phase === 'answering' && problem === null && !sending
+  const listening = !typing && canListen && microphoneOn && phase === 'answering' && problem === null && !sending
 
   useEffect(() => {
     if (!listening) return
@@ -108,6 +120,7 @@ export default function AnswerPanel({
 
   const keepTalking = () => {
     setHeard({ confirmed: draft, pending: '' })
+    setTyping(false)
     setPhase('answering')
   }
 
@@ -140,9 +153,21 @@ export default function AnswerPanel({
           {canListen && !microphoneOn && spoken && (
             <p className="text-xs text-slate-400">Your microphone is muted. Unmute to keep answering, or press Done.</p>
           )}
-          <Button onClick={review} disabled={!spoken || sending}>
-            Done answering
-          </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              className="text-sm text-violet-300 hover:text-violet-200"
+              onClick={() => {
+                setTyping(true)
+                review()
+              }}
+            >
+              Type instead
+            </button>
+            <Button onClick={review} disabled={!spoken || sending}>
+              Done answering
+            </Button>
+          </div>
         </>
       ) : (
         <form
@@ -158,20 +183,29 @@ export default function AnswerPanel({
             </Alert>
           )}
           <label htmlFor="answer-review" className="text-sm font-medium text-slate-200">
-            Check your answer
+            {typing ? 'Your answer' : 'Check your answer'}
           </label>
           <textarea
             id="answer-review"
             className={`${inputClass} min-h-40 flex-1`}
             value={draft}
             maxLength={MAX_ANSWER}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              saveDraft(questionId, event.target.value)
+            }}
             disabled={sending}
+            placeholder={typing ? 'Answer as you would in a real interview.' : undefined}
           />
-          <p className="text-xs text-slate-500">Fix any words the browser heard wrong, then send.</p>
+          <p className="flex justify-between gap-2 text-xs text-slate-500">
+            <span>{typing ? 'Your answer is saved in this browser as you type.' : 'Fix any words the browser heard wrong, then send.'}</span>
+            <span>
+              {draft.length.toLocaleString()} / {MAX_ANSWER.toLocaleString()}
+            </span>
+          </p>
           {error && <Alert title="Your answer was not sent">{error} Your answer is still here, so you can send it again.</Alert>}
           <div className="flex flex-wrap justify-between gap-2">
-            {problem === null && (
+            {mode === 'speak' && problem === null && (
               <Button type="button" variant="secondary" onClick={keepTalking} disabled={sending}>
                 Keep talking
               </Button>

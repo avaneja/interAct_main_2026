@@ -1,6 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { loadDraft, saveDraft } from '../lib/drafts'
 import AnswerPanel, { type AnswerPanelProps } from './AnswerPanel'
 import type { TranscriberEvents } from './recognition'
 
@@ -23,6 +24,8 @@ function fakeTranscriber() {
 function renderPanel(overrides: Partial<AnswerPanelProps> = {}) {
   const transcriber = fakeTranscriber()
   const props: AnswerPanelProps = {
+    questionId: 'q-2',
+    mode: 'speak',
     interviewerName: 'Maya',
     questionNumber: 2,
     questionCount: 5,
@@ -169,5 +172,50 @@ describe('answering by voice', () => {
     unmount()
 
     expect(transcriber.stop).toHaveBeenCalled()
+  })
+})
+
+describe('answering by typing', () => {
+  it('shows the answer box from the start, without listening', async () => {
+    const { props, transcriber } = renderPanel({ mode: 'type', canListen: false })
+    const user = userEvent.setup()
+
+    const box = screen.getByLabelText('Your answer')
+    await user.type(box, 'A process is a running program')
+    await user.click(screen.getByRole('button', { name: 'Send answer' }))
+
+    expect(props.onSubmit).toHaveBeenCalledWith('A process is a running program')
+    expect(transcriber.start).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Keep talking' })).not.toBeInTheDocument()
+  })
+
+  it('saves the typed answer in the browser and restores it after a reload', async () => {
+    const first = renderPanel({ mode: 'type' })
+    await userEvent.setup().type(screen.getByLabelText('Your answer'), 'Half an answer')
+    expect(loadDraft('q-2')).toBe('Half an answer')
+    first.unmount()
+
+    renderPanel({ mode: 'type' })
+
+    expect(screen.getByLabelText('Your answer')).toHaveValue('Half an answer')
+  })
+
+  it('switches a spoken answer to typing, keeping what was heard', async () => {
+    const { transcriber } = renderPanel()
+    transcriber.say('A process is')
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Type instead' }))
+
+    expect(screen.getByLabelText('Your answer')).toHaveValue('A process is')
+    expect(transcriber.stop).toHaveBeenCalled()
+  })
+
+  it('reopens a reviewed spoken answer after a reload', () => {
+    saveDraft('q-2', 'My reviewed answer')
+
+    const { transcriber } = renderPanel()
+
+    expect(screen.getByLabelText('Check your answer')).toHaveValue('My reviewed answer')
+    expect(transcriber.start).not.toHaveBeenCalled()
   })
 })
