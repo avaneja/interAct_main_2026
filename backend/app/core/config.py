@@ -31,6 +31,25 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     style_check: Literal["rules", "rules_and_llm"] = "rules_and_llm"
+    # Where people open the app. OAuth providers send users back to
+    # {public_url}/api/v1/auth/{provider}/callback, so it must match the
+    # callback registered with each provider.
+    public_url: str = "http://localhost:5173"
+    # OAuth apps. A provider is offered only when both its values are set.
+    # Secrets stay on the server: they never reach the browser or the logs.
+    google_client_id: str = ""
+    google_client_secret: SecretStr = SecretStr("")
+    github_client_id: str = ""
+    github_client_secret: SecretStr = SecretStr("")
+
+    def oauth_providers(self) -> list[str]:
+        """The sign-in providers whose OAuth app is configured."""
+        configured = []
+        if self.google_client_id and self.google_client_secret.get_secret_value():
+            configured.append("google")
+        if self.github_client_id and self.github_client_secret.get_secret_value():
+            configured.append("github")
+        return configured
 
 
 @lru_cache
