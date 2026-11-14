@@ -1,18 +1,20 @@
 # InterAct
 
-**An AI-powered, configurable interview practice platform with topic-based and document-grounded interviews, adaptive follow-ups, and evidence-based feedback.**
+**An AI interview practice platform: a live, call-style interview with a 3D AI interviewer who asks questions aloud, listens to spoken answers, and gives evidence-based feedback on topic-based or document-grounded interviews.**
 
 > **Project status:** Planned capstone — this README is a proposed technical specification, not documentation of an already implemented system.
 >
 > **Team:** 4 developers | **MVP timeline:** 15 days (primary developer, ~2–4 h/day) | **Focus:** Applied AI/ML research + full-stack software engineering
 >
-> The MVP scope is defined in [§9 — 15-day MVP roadmap](#9-15-day-mvp-roadmap). Anything not listed there is a future extension.
+> The MVP scope is defined in [§9 — MVP roadmap](#9-mvp-roadmap). Anything not listed there is a future extension.
 
 ## 1. Product overview
 InterAct allows a user to prepare for an interview in **exactly two ways**:
 
 - **Model A — Topic-Based Interview:** The user describes what they want to be interviewed on in natural language. An LLM conducts a short **pre-interview clarification conversation** to establish the topic boundaries, goals, experience level, and relevant subtopics.
 - **Model B — Document-Based Interview:** The user uploads a supported document. The platform extracts and organizes its content, then creates an interview grounded in that document. The user can review the identified topics and adjust the scope before proceeding.
+
+**The interview itself is a call.** Whichever model prepares it, the interview runs like a video call: a 3D interviewer on one side of the screen asks each question aloud with lip-synced speech, the candidate's camera is on the other side, and the candidate answers by speaking. Live captions show both sides. With the candidate's consent, the browser also tracks eye contact and tab switches during the call and reports them as practice feedback.
 
 **Question-style selection is not a third model.** Both models lead into the same configuration screen, where the user chooses direct, conceptual, case-based, scenario-based, application/problem-solving, or mixed questions, along with difficulty and question count. Both models then use the **same interview engine, scoring pipeline, and reporting system**.
 
@@ -25,7 +27,7 @@ InterAct allows a user to prepare for an interview in **exactly two ways**:
 5. Provide actionable, evidence-based feedback rather than unsupported scores.
 6. Evaluate the system scientifically against a fixed-question baseline.
 
-**Positioning:** InterAct is an interview *practice and formative assessment* tool, not a validated automated hiring system. It should not make employment decisions or infer personality, emotion, or employability from facial or vocal cues.
+**Positioning:** InterAct is an interview *practice and formative assessment* tool, not a validated automated hiring system. It should not make employment decisions or infer personality, emotion, or employability from facial or vocal cues. Camera-based focus signals (eye contact, looking away, face not visible) and tab switches are shown only as practice feedback; they never change the rubric score.
 
 ---
 
@@ -43,8 +45,9 @@ flowchart TD
     G --> H
     H --> I[Shared configuration: question type, difficulty, count]
     I --> J[Preview and confirm interview plan]
-    J --> K[Generate first question]
-    K --> L[Candidate answers]
+    J --> CHK[Pre-call check: camera, microphone, consent]
+    CHK --> K[Interviewer asks the first question aloud]
+    K --> L[Candidate answers by voice or typing]
     L --> M[Evaluate answer against rubric]
     M --> N{More questions?}
     N -->|Yes| O[Select next question or adaptive follow-up]
@@ -126,21 +129,39 @@ Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP 
 
 **Enforcement:** Store `question_type` in the session configuration and on every generated question. Validate question output against the requested style using schema checks and an optional lightweight LLM classifier. Regenerate or flag mismatches. A case-based question should include a concrete case; a scenario-based question should include a situation and decision constraints.
 
-### 2.4 Live interview
+### 2.4 Live interview (call)
 
-1. The system presents **one question at a time**.
-2. The user submits a text answer.
-3. The evaluator returns structured scores, evidence from the answer, missing concepts, and uncertainty.
-4. The interview state is updated with covered competencies, difficulty, question count, and recent performance.
-5. The adaptive policy selects the next subtopic and question intent. The generator creates the next question within the **user-selected style**.
-6. Repeat until the configured question budget is exhausted or the user ends the session.
-7. Aggregate the rubric scores and generate the final report.
+1. **Pre-call check.** The candidate sees their camera and microphone, tests both, and gives consent for focus tracking. They can turn the camera off (no focus data is collected) or choose to type answers instead of speaking. The screen says plainly what is processed and where (see §2.4.1).
+2. **The call screen.** Like a video call: the interviewer's tile (a 3D avatar) and the candidate's camera tile, live captions, the question number, a timer, and mute, captions and end-call controls. The interview runs in full screen.
+3. The interviewer **asks one question at a time aloud**, with lip-synced speech, and the question text stays visible in the captions.
+4. The candidate **answers by speaking**; the transcript appears live. They finish by pressing **Done** (or after a few seconds of silence), can correct recognition mistakes in the transcript, and send it. Typing is always available instead.
+5. The evaluator returns structured scores, evidence from the answer, missing concepts, and uncertainty. With end-of-interview feedback (the default), the interviewer only acknowledges the answer and moves on; scores appear in the report.
+6. The interview state is updated with covered competencies, difficulty, question count, and recent performance.
+7. The adaptive policy selects the next subtopic and question intent. The generator creates the next question within the **user-selected style**. The next question is prepared while the candidate is still answering where possible, so the interviewer does not stall.
+8. Repeat until the configured question budget is exhausted or the candidate ends the call. A paused call resumes at the same question.
+9. Aggregate the rubric scores and focus metrics and generate the final report.
 
 **Important:** Follow-up questions count toward the configured question budget unless the product explicitly offers a separate follow-up allowance. The MVP uses the same question budget in fixed and adaptive experiments.
+
+### 2.4.1 Focus and delivery signals
+
+All of these are computed **in the browser**. InterAct never records, stores or uploads video, camera frames, audio or screen contents; only the per-question numbers below are sent to the backend.
+
+| Signal | How | Reported as |
+|---|---|---|
+| Eye contact / looking away | MediaPipe Face Landmarker estimates head pose and iris direction from the webcam | Share of answering time looking at the screen; look-away episodes longer than a few seconds |
+| Face visibility | Same model | Time with no face, or more than one face, in view |
+| Tab switches | Page Visibility API, window focus, full-screen exit | Count and total time away from the interview |
+| Speaking delivery | From the transcript and timings | Answer duration, words per minute, filler words ("um", "like") |
+
+These are estimates: lighting, glasses, and camera position affect them, and the report says so. They are practice feedback in a separate **Delivery and focus** section, are never part of the rubric score, and are never used to infer emotion, personality, or honesty.
+
+**Speech recognition:** The MVP uses the browser's built-in speech recognition (Chrome), which sends the candidate's audio to Google to transcribe it. The pre-call check states this, and typing is always available. On-device recognition (Whisper) is a future extension.
 
 ### 2.5 Final feedback report
 
 - Overall practice score (clearly labeled as a rubric-based estimate).
+- A separate **Delivery and focus** section (eye contact, looking away, tab switches, speaking pace, filler words), when the candidate consented; it does not affect the score.
 - Per-competency scores and coverage.
 - Per-question response, score, explanation, and answer-grounded evidence.
 - What the user answered correctly and what was missing.
@@ -158,6 +179,7 @@ Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP 
 ```mermaid
 flowchart TB
     UI[React + TypeScript UI] --> API[FastAPI REST API]
+    UI --> CALL[Call screen in the browser: 3D interviewer, text-to-speech, speech recognition, focus tracking]
     API --> AUTH[Authentication and session service]
     API --> ING[Context preparation service]
     ING --> TOPIC[Model A: Topic clarification]
@@ -184,7 +206,11 @@ flowchart TB
 
 | Component | Technology | Responsibility |
 |---|---|---|
-| Frontend | React + TypeScript + Vite + Tailwind CSS | Preparation chat, upload UI, configuration, interview, report |
+| Frontend | React + TypeScript + Vite + Tailwind CSS | Preparation chat, upload UI, configuration, call screen, report |
+| Interviewer avatar | TalkingHead (Three.js, MIT) with free GLB avatars | 3D interviewer with lip-sync, blinking, and head movement, in the browser |
+| Interviewer voice | HeadTTS (Kokoro neural voices, MIT / Apache 2.0) | Text-to-speech with lip-sync timings, in the browser (WebGPU) |
+| Candidate speech | Browser speech recognition (Web Speech API, Chrome) | Live transcript of spoken answers; typing as a fallback |
+| Focus tracking | MediaPipe Face Landmarker (Apache 2.0) + Page Visibility API | Eye contact, face visibility, and tab switches, in the browser |
 | Backend | Python 3.13 + FastAPI + Pydantic | API endpoints, validation, session lifecycle |
 | Orchestration | Explicit Python state machine (no agent framework) | Deterministic state transitions and conditional follow-ups |
 | LLM | OpenAI-compatible adapter; local and hosted modes | Clarification, extraction, generation, scoring, feedback |
@@ -405,7 +431,9 @@ All session/document/job endpoints must authorize access to the resource owner. 
 
 **Raw LLM output:** `llm_calls` keeps the unmodified model response, separate from the validated data in `questions`, `evaluations`, and `reports`.
 
-**Preset avatars:** Presets are a static list in the application, identified by a key, so the MVP needs no avatar tables. `users.default_avatar_key` stores the saved choice.
+**Preset avatars:** Presets are a static list of 3D interviewer models (GLB files with a voice each) in the application, identified by a key, so the MVP needs no avatar tables. `users.default_avatar_key` stores the saved choice.
+
+**Focus and delivery metrics:** Stored per answer as a small set of numbers (for example `looking_away_ratio`, `tab_switches`, `words_per_minute`), only when the candidate consented. No media is stored. The exact columns are fixed in M6.
 
 Store minimal personal information. Set retention/deletion rules for uploaded files and answers. Research datasets should be synthetic or explicitly consented and de-identified where appropriate.
 
@@ -431,9 +459,11 @@ Do not claim that the adaptive system is superior until experimental results sup
 
 ---
 
-## 9. 15-day MVP roadmap
+## 9. MVP roadmap
 
-Budget: about 30–60 hours. Each milestone ends with passing tests and a reviewable pull request.
+Originally planned as 15 days (about 30–60 hours). Each milestone ends with passing tests and a reviewable pull request.
+
+**Scope change (2026-11-14):** after M4, the interview changed from a typed question-and-answer page to a live, call-style interview. M5 and M6 are new; the earlier M5–M7 became M7–M9. Everything built in M1–M4 (engine, scoring, report, sign-in) is reused unchanged: the call only changes how questions are asked and answers are given.
 
 | # | Milestone | Exit criteria |
 |---|---|---|
@@ -442,11 +472,13 @@ Budget: about 30–60 hours. Each milestone ends with passing tests and a review
 | **M2** | OpenAI-compatible LLM adapter (Ollama), style-aware question generation, rubric evaluator, local model comparison | Real questions and validated evaluations from a local model |
 | **M3** | Frontend flow: topic input → configuration → interview → report | End-to-end interview in the browser (Model A, no clarification yet) |
 | **M4** | Google and GitHub sign-in | Only the owner can access their sessions |
-| **M5** | Model A clarification conversation | Skippable 2–4 question clarification produces a confirmed context |
-| **M6** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
-| **M7** | Adaptive follow-ups, preset avatars, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
+| **M5** | Call-style interview with voice: pre-call check, call screen, 3D interviewer (TalkingHead) speaking each question (HeadTTS), spoken answers with live captions and a typed fallback | A full Model A interview held as a spoken call in Chrome |
+| **M6** | Camera and focus: consent, camera tile, eye contact and face visibility (MediaPipe), tab-switch and full-screen detection, speaking pace and filler words, **Delivery and focus** report section | The report shows focus and delivery metrics; no media leaves the browser |
+| **M7** | Model A clarification conversation, held by the interviewer before the call's first question | Skippable 2–4 question clarification produces a confirmed context |
+| **M8** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
+| **M9** | Adaptive follow-ups, choice of preset interviewer, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
 
-**Scope protection:** Text-only interview is the MVP. Voice, video, emotion detection, arbitrary code execution, custom model training, DOCX/PPTX parsing, and AI avatar generation are out of scope for the MVP. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
+**Scope protection:** The MVP interview is a call-style practice interview with spoken questions and answers, a 3D interviewer, and focus signals computed in the browser. Out of scope for the MVP: photo-realistic or generated avatars, paid avatar or voice services, emotion or personality detection, storing or uploading video, audio or screen contents, on-device speech recognition, arbitrary code execution, custom model training, and DOCX/PPTX parsing. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
 
 ### Team allocation
 
@@ -455,7 +487,7 @@ Budget: about 30–60 hours. Each milestone ends with passing tests and a review
 | **Member 1 — AI planning & orchestration** | Model A clarification, interview context, question generation, question-style enforcement, adaptive policy |
 | **Member 2 — Document intelligence & research** | Model B parsing/grounding, scoring rubric, dataset, human evaluation, experiment analysis |
 | **Member 3 — Backend & data** | FastAPI, PostgreSQL, APIs, authentication, session state, persistence, backend tests |
-| **Member 4 — Frontend & deployment** | React UX, upload/chat/config/interview/report screens, frontend tests, Docker and hosting |
+| **Member 4 — Frontend & deployment** | React UX, call screen (avatar, voice, captions, focus tracking), upload/chat/config/report screens, frontend tests, Docker and hosting |
 
 All members collaborate on API contracts, integration, end-to-end tests, and documentation.
 
@@ -471,6 +503,8 @@ All members collaborate on API contracts, integration, end-to-end tests, and doc
 - [ ] Direct, conceptual, case-based, scenario-based, application, and mixed questions are supported.
 - [ ] User confirms the interview plan before the first question.
 - [ ] Interview progresses one question at a time with persisted answers.
+- [ ] The interview runs as a call: the 3D interviewer asks each question aloud, and the candidate answers by voice (or typing) with live captions.
+- [ ] With consent, the report shows eye contact, looking-away, and tab-switch metrics computed in the browser; no video, audio, or screen contents are stored.
 - [ ] Adaptive follow-ups preserve the selected question style and topic scope.
 - [ ] Final report includes scores, answer evidence, and actionable suggestions.
 
@@ -523,7 +557,7 @@ interact/
 
 ## 12. Demo scenarios
 
-**Scenario A — Topic-based:** “Interview me on operating systems for a software engineering internship.” The AI clarifies focus, user selects scenario-based questions, and the interviewer asks situational OS questions followed by targeted follow-ups.
+**Scenario A — Topic-based:** “Interview me on operating systems for a software engineering internship.” The AI clarifies focus, the user selects scenario-based questions, and in a call-style interview the 3D interviewer asks situational OS questions aloud, followed by targeted follow-ups. The user answers by speaking, and the report adds eye contact and speaking pace to the rubric scores.
 
 **Scenario B — Document-based:** User uploads a lecture PDF on database normalization, selects case-based questions, and receives questions tied to the uploaded material, followed by an evidence-based feedback report.
 
@@ -533,7 +567,8 @@ interact/
 
 ## 13. Future extensions (not MVP commitments)
 
-- Voice input/output and speech transcription.
+- On-device speech recognition (for example Whisper) instead of the browser's cloud recognition.
+- A photo-realistic interviewer through a real-time avatar service (paid per minute).
 - Coding interviews with isolated execution and automated test cases.
 - User-selectable feedback timing and detailed progress trends.
 - Multilingual interview support.
@@ -545,7 +580,7 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** MVP scope agreed (see §9); frontend scaffold (React + TypeScript + Vite + Tailwind CSS) exists; backend, LLM integration, and benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** M0–M4 are implemented: the backend and interview engine, local LLM questions and scoring, the typed interview flow in the browser, and Google/GitHub sign-in. On 2026-11-14 the scope changed to a call-style interview (§9, M5 onward); the deployed demo and benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
 
 
