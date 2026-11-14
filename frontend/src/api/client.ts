@@ -1,5 +1,7 @@
 import type {
   AnswerResult,
+  ChatReply,
+  ChatStage,
   InputModel,
   InterviewConfig,
   InterviewContext,
@@ -118,6 +120,7 @@ export const api = {
   submitAnswer: (id: string, questionId: string, text: string) =>
     request<AnswerResult>('POST', session(id, 'answers'), { question_id: questionId, text }),
   retry: (id: string) => request<AnswerResult>('POST', session(id, 'retry')),
+  chat: (id: string, stage: ChatStage, text: string) => request<ChatReply>('POST', session(id, 'chat'), { stage, text }),
   pause: (id: string) => request<SessionView>('POST', session(id, 'pause')),
   resume: (id: string) => request<SessionView>('POST', session(id, 'resume')),
   finish: (id: string) => request<SessionView>('POST', session(id, 'finish')),

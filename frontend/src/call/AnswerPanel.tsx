@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Alert, Button, Card } from '../components/ui'
 import { loadDraft, saveDraft } from '../lib/drafts'
 import { inputClass } from '../lib/styles'
@@ -15,13 +15,17 @@ const join = (...parts: string[]) =>
     .join(' ')
 
 export interface AnswerPanelProps {
-  questionId: string
+  /** Where the unsent text is kept in the browser, for example the question's id. */
+  draftKey: string
   /** Chosen in the lobby. When typing, the answer box is shown from the start. */
   mode: 'speak' | 'type'
   interviewerName: string
-  questionNumber: number
-  questionCount: number
-  question: string
+  /** What is being answered, for example "Question 2 of 5 · Follow-up". */
+  label: string
+  /** The question or prompt the interviewer asked. */
+  prompt: string
+  /** Another way to move on, shown below the answer (for example ending the call). */
+  extraAction?: ReactNode
   /** The interviewer has finished asking, so listening can start. */
   canListen: boolean
   microphoneOn: boolean
@@ -41,12 +45,12 @@ export interface AnswerPanelProps {
  * type. A spoken answer can switch to typing at any point.
  */
 export default function AnswerPanel({
-  questionId,
+  draftKey,
   mode,
   interviewerName,
-  questionNumber,
-  questionCount,
-  question,
+  label,
+  prompt,
+  extraAction,
   canListen,
   microphoneOn,
   sending,
@@ -57,7 +61,7 @@ export default function AnswerPanel({
   makeTranscriber = createTranscriber,
 }: AnswerPanelProps) {
   // A saved draft (typed, or a reviewed transcript before a reload) goes straight to the answer box.
-  const [saved] = useState(() => loadDraft(questionId))
+  const [saved] = useState(() => loadDraft(draftKey))
   const [typing, setTyping] = useState(mode === 'type')
   const [phase, setPhase] = useState<'answering' | 'review'>(mode === 'type' || saved ? 'review' : 'answering')
   const [heard, setHeard] = useState({ confirmed: '', pending: '' })
@@ -69,9 +73,9 @@ export default function AnswerPanel({
   const review = useCallback(() => {
     const text = join(latest.current.confirmed, latest.current.pending)
     setDraft(text)
-    saveDraft(questionId, text)
+    saveDraft(draftKey, text)
     setPhase('review')
-  }, [questionId])
+  }, [draftKey])
 
   const transcriber = useRef<Transcriber | null>(null)
 
@@ -127,10 +131,8 @@ export default function AnswerPanel({
   return (
     <Card className="flex h-full flex-col gap-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-violet-300">
-          Question {questionNumber} of {questionCount}
-        </p>
-        <p className="mt-1 text-sm leading-relaxed text-slate-100">{question}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-violet-300">{label}</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-100">{prompt}</p>
       </div>
 
       {phase === 'answering' ? (
@@ -143,7 +145,7 @@ export default function AnswerPanel({
             ) : (
               <p className="text-slate-500">
                 {!canListen
-                  ? `Listen to the question. Your microphone turns on when ${interviewerName} finishes.`
+                  ? `Listen to ${interviewerName}. Your microphone turns on when ${interviewerName} finishes.`
                   : !microphoneOn
                     ? 'Your microphone is muted. Unmute it to answer.'
                     : 'Listening… answer out loud.'}
@@ -174,7 +176,7 @@ export default function AnswerPanel({
           className="flex flex-1 flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault()
-            if (draft.trim()) onSubmit(draft.trim())
+            if (draft.trim() && canListen && !sending) onSubmit(draft.trim())
           }}
         >
           {problem && (
@@ -192,7 +194,7 @@ export default function AnswerPanel({
             maxLength={MAX_ANSWER}
             onChange={(event) => {
               setDraft(event.target.value)
-              saveDraft(questionId, event.target.value)
+              saveDraft(draftKey, event.target.value)
             }}
             disabled={sending}
             placeholder={typing ? 'Answer as you would in a real interview.' : undefined}
@@ -203,6 +205,9 @@ export default function AnswerPanel({
               {draft.length.toLocaleString()} / {MAX_ANSWER.toLocaleString()}
             </span>
           </p>
+          {!canListen && !sending && (
+            <p className="text-xs text-slate-400">You can send once {interviewerName} has finished speaking.</p>
+          )}
           {error && <Alert title="Your answer was not sent">{error} Your answer is still here, so you can send it again.</Alert>}
           <div className="flex flex-wrap justify-between gap-2">
             {mode === 'speak' && problem === null && (
@@ -210,12 +215,13 @@ export default function AnswerPanel({
                 Keep talking
               </Button>
             )}
-            <Button type="submit" busy={sending} disabled={!draft.trim() || sending}>
+            <Button type="submit" busy={sending} disabled={!draft.trim() || sending || !canListen}>
               {sending ? 'Sending…' : 'Send answer'}
             </Button>
           </div>
         </form>
       )}
+      {extraAction}
     </Card>
   )
 }

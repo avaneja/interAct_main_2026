@@ -26,6 +26,8 @@ export function makeQuestion(overrides: Partial<QuestionView> = {}): QuestionVie
   return {
     id: 'q-1',
     sequence: 1,
+    follow_up: 0,
+    lead_in: null,
     type: 'DIRECT',
     competency: 'processes',
     difficulty: 'intermediate',
@@ -67,6 +69,7 @@ export function makeReport(): ReportView {
           difficulty: 'intermediate',
           prompt: 'What is a process?',
           answer: 'A running program with its own memory.',
+          follow_ups: [{ prompt: 'What does its own memory mean?', answer: 'Its own address space.' }],
           evaluation: {
             score: 9,
             max_score: 10,
@@ -86,6 +89,7 @@ export function makeReport(): ReportView {
           difficulty: 'intermediate',
           prompt: 'Why does paging help?',
           answer: 'I like pizza.',
+          follow_ups: [],
           evaluation: {
             score: 3,
             max_score: 10,
@@ -105,6 +109,7 @@ export function makeReport(): ReportView {
           difficulty: 'intermediate',
           prompt: 'Diagnose this scheduler.',
           answer: null,
+          follow_ups: [],
           evaluation: null,
           better_answer_outline: [],
           answer_key: null,

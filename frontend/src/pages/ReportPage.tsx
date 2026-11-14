@@ -162,6 +162,17 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
           <h3 className="font-semibold text-slate-200">Your answer</h3>
           <p className="mt-1 whitespace-pre-wrap text-slate-300">{question.answer ?? 'You did not answer this question.'}</p>
         </div>
+        {question.follow_ups.length > 0 && (
+          <div className="space-y-3 border-l-2 border-slate-800 pl-3">
+            {question.follow_ups.map((followUp, index) => (
+              <div key={index}>
+                <h3 className="font-semibold text-slate-200">Follow-up: {followUp.prompt}</h3>
+                <p className="mt-1 whitespace-pre-wrap text-slate-300">{followUp.answer ?? 'Not answered.'}</p>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">Your replies to follow-ups are scored together with your answer.</p>
+          </div>
+        )}
         {evaluation?.insufficient_evidence && (
           <Alert kind="warning">This answer could not be graded with confidence: {evaluation.insufficient_reason ?? 'the evaluator flagged it'}.</Alert>
         )}

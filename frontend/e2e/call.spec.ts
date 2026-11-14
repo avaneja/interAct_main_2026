@@ -66,9 +66,15 @@ test('a spoken call: listen, transcribe, review, send, and end early', async ({ 
   await expect(page.getByLabel('Your camera')).toBeVisible()
   await page.getByRole('button', { name: 'Join interview' }).click()
 
-  // The interviewer asks; then the candidate's words appear in the panel and the caption.
+  // The warm-up is spoken too: "tell me a little bit about yourself".
   const controls = page.getByRole('toolbar', { name: 'Call controls' })
   await expect(controls).toBeVisible()
+  await expect(page.getByText('Getting started', { exact: true })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Listening' })).toBeVisible()
+  await page.getByRole('button', { name: 'Done answering' }).click()
+  await page.getByRole('button', { name: 'Send answer' }).click()
+
+  // The interviewer asks; then the candidate's words appear in the panel and the caption.
   await expect(page.getByText('Question 1 of 5', { exact: true })).toBeVisible()
   await expect(page.getByRole('status').filter({ hasText: 'Listening' })).toBeVisible()
   await expect(page.locator('p[aria-live=polite]').filter({ hasText: `You:${HEARD}` })).toBeVisible()

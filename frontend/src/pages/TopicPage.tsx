@@ -120,7 +120,7 @@ function TopicForm({ session }: { session: SessionView | null }) {
           <Field
             id="subtopics"
             label="Subtopics to focus on (optional)"
-            hint="Separate with commas. Questions rotate through them; without any, they cover the whole topic."
+            hint="Separate with commas. Questions rotate through them. Leave it empty and the interviewer picks the main areas of the topic."
             error={errors.subtopics}
           >
             <textarea

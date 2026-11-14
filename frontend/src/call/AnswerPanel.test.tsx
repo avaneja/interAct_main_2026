@@ -24,12 +24,11 @@ function fakeTranscriber() {
 function renderPanel(overrides: Partial<AnswerPanelProps> = {}) {
   const transcriber = fakeTranscriber()
   const props: AnswerPanelProps = {
-    questionId: 'q-2',
+    draftKey: 'q-2',
     mode: 'speak',
     interviewerName: 'Maya',
-    questionNumber: 2,
-    questionCount: 5,
-    question: 'What is a process?',
+    label: 'Question 2 of 5',
+    prompt: 'What is a process?',
     canListen: true,
     microphoneOn: true,
     sending: false,
@@ -56,7 +55,7 @@ describe('answering by voice', () => {
 
     expect(screen.getByText('Question 2 of 5')).toBeInTheDocument()
     expect(screen.getByText('What is a process?')).toBeInTheDocument()
-    expect(screen.getByText(/Your microphone turns on when Maya finishes/)).toBeInTheDocument()
+    expect(screen.getByText('Listen to Maya. Your microphone turns on when Maya finishes.')).toBeInTheDocument()
     expect(transcriber.start).not.toHaveBeenCalled()
 
     rerender({ canListen: true })
@@ -177,11 +176,15 @@ describe('answering by voice', () => {
 
 describe('answering by typing', () => {
   it('shows the answer box from the start, without listening', async () => {
-    const { props, transcriber } = renderPanel({ mode: 'type', canListen: false })
+    const { props, transcriber, rerender } = renderPanel({ mode: 'type', canListen: false })
     const user = userEvent.setup()
 
     const box = screen.getByLabelText('Your answer')
     await user.type(box, 'A process is a running program')
+    // Typing can start while the interviewer speaks; sending waits until the question is asked.
+    expect(screen.getByRole('button', { name: 'Send answer' })).toBeDisabled()
+    expect(screen.getByText('You can send once Maya has finished speaking.')).toBeInTheDocument()
+    rerender({ mode: 'type', canListen: true })
     await user.click(screen.getByRole('button', { name: 'Send answer' }))
 
     expect(props.onSubmit).toHaveBeenCalledWith('A process is a running program')
@@ -217,5 +220,13 @@ describe('answering by typing', () => {
 
     expect(screen.getByLabelText('Check your answer')).toHaveValue('My reviewed answer')
     expect(transcriber.start).not.toHaveBeenCalled()
+  })
+})
+
+describe('another way to move on', () => {
+  it('shows an extra action below the answer', () => {
+    renderPanel({ extraAction: <button type="button">No questions, end the interview</button> })
+
+    expect(screen.getByRole('button', { name: 'No questions, end the interview' })).toBeInTheDocument()
   })
 })

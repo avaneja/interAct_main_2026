@@ -64,6 +64,10 @@ export interface SessionView {
 export interface QuestionView {
   id: string
   sequence: number
+  /** 0 for a planned question, 1 or more for the interviewer's follow-ups to it. */
+  follow_up: number
+  /** What the interviewer says just before the question: a reaction and a transition. */
+  lead_in: string | null
   type: Exclude<QuestionType, 'MIXED'>
   competency: string
   difficulty: Difficulty
@@ -74,8 +78,19 @@ export interface QuestionView {
 
 export interface AnswerResult {
   state: SessionState
+  /** Null after the last planned question: the wrap-up, until the interview is finished. */
   next_question: QuestionView | null
   completed: boolean
+  /** What the interviewer says about the answer (also the start of the next question's lead_in). */
+  reaction: string | null
+}
+
+export type ChatStage = 'warm_up' | 'closing'
+
+export interface ChatReply {
+  reply: string
+  /** True when the closing conversation is over. */
+  done: boolean
 }
 
 export interface CriterionResult {
@@ -93,6 +108,8 @@ export interface QuestionReport {
   difficulty: Difficulty
   prompt: string
   answer: string | null
+  /** The interviewer's follow-up questions and the candidate's replies, scored with the answer. */
+  follow_ups: { prompt: string; answer: string | null }[]
   evaluation: {
     score: number
     max_score: number

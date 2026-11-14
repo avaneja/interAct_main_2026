@@ -51,6 +51,11 @@ test('a topic interview runs from the home page to the report', async ({ page })
   await join()
   await expect(page.getByRole('toolbar', { name: 'Call controls' })).toBeVisible()
 
+  // The warm-up: "tell me a little bit about yourself".
+  await expect(page.getByText('Getting started', { exact: true })).toBeVisible()
+  await page.getByLabel('Your answer').fill('I study computer science and I am preparing for internships.')
+  await page.getByRole('button', { name: 'Send answer' }).click()
+
   for (let sequence = 1; sequence <= 5; sequence++) {
     await expect(page.getByText(`Question ${sequence} of 5`, { exact: true })).toBeVisible()
     const answer = page.getByLabel('Your answer')
@@ -75,7 +80,9 @@ test('a topic interview runs from the home page to the report', async ({ page })
     await page.getByRole('button', { name: 'Send answer' }).click()
   }
 
-  // The last answer opens the report.
+  // The wrap-up: the candidate may ask questions; with none, the report is written.
+  await expect(page.getByText('Your questions', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'No questions, end the interview' }).click()
   await expect(page).toHaveURL(/\/report$/)
   await expect(page.getByRole('heading', { name: 'Your report: Operating systems' })).toBeVisible()
   await expect(page.getByText(/5 of 5 questions answered/)).toBeVisible()

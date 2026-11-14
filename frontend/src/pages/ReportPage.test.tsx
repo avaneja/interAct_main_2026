@@ -41,6 +41,17 @@ describe('report page', () => {
     expect(screen.getByText('Not answered')).toBeInTheDocument()
   })
 
+  it('shows the follow-up questions and replies under the answer', async () => {
+    mockedApi.report.mockResolvedValue(makeReport())
+    renderApp('/sessions/s-1/report')
+
+    await userEvent.setup().click(await screen.findByText('What is a process?'))
+
+    expect(screen.getByText('Follow-up: What does its own memory mean?')).toBeVisible()
+    expect(screen.getByText('Its own address space.')).toBeVisible()
+    expect(screen.getByText(/scored together with your answer/)).toBeVisible()
+  })
+
   it('explains a low-confidence grade', async () => {
     mockedApi.report.mockResolvedValue(makeReport())
     const user = userEvent.setup()
