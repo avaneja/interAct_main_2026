@@ -68,9 +68,10 @@ def get_session(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Sess
 
 @router.put("/{session_id}/context")
 def set_context(
-    session_id: uuid.UUID, body: InterviewContext, db: DbSession, user: CurrentUser
+    session_id: uuid.UUID, body: InterviewContext, db: DbSession, user: CurrentUser, llm: LLM
 ) -> SessionView:
-    return _view(db, svc.set_context(db, user, session_id, body))
+    """Save the context. Missing or vague subtopics are replaced by concrete ones the model suggests."""
+    return _view(db, svc.set_context(db, user, session_id, body, llm))
 
 
 @router.put("/{session_id}/config")

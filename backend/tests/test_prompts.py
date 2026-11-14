@@ -21,6 +21,7 @@ FINGERPRINTS = {
     "evaluation-v1": "50f44b31da64085e",
     "evaluation-v2": "bd9b43e7a3ed9062",
     "turn-v1": "691033561cbaed55",
+    "subtopics-v1": "db8d3fa41efabf55",
 }
 
 
@@ -44,6 +45,8 @@ def sample_requests():
             topic="Databases", candidate_name="Ada",
             exchange=[("Why do indexes speed up reads?", "They avoid full scans.")],
             follow_ups_left=2, next_focus="transactions"),
+        "suggest_subtopics": prompts.subtopics_request(context=InterviewContext.model_validate(
+            {"input_model": "TOPIC", "topic": "DSA", "level": "intermediate", "subtopics": ["All DSA topics"]})),
     }
 
 

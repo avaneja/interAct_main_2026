@@ -37,6 +37,7 @@ llm_calls on its own, and the session is locked again and re-checked before
 the result is applied.
 """
 
+import re
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -69,6 +70,7 @@ from app.schemas import (
     InterviewContext,
     InterviewerTurn,
     StyleVerdict,
+    SuggestedSubtopics,
 )
 from app.services import prompts
 from app.services.evidence import (
@@ -157,10 +159,49 @@ def create_session(db: Session, user: User, input_model: InputModel) -> Intervie
 # Preparing the plan
 
 
+_VAGUE = re.compile(
+    r"\b(all|every|everything|any|anything|general|generic|basics?|overall|whole|entire|misc\w*|various)\b",
+    re.IGNORECASE,
+)
+
+
+def needs_subtopics(context: InterviewContext) -> bool:
+    """True if a topic interview has no subtopics, or only vague ones like "All DSA topics"."""
+    if context.input_model is not InputModel.TOPIC:
+        return False
+    topic = context.topic.casefold()
+    return all(_VAGUE.search(subtopic) or subtopic.casefold() == topic for subtopic in context.subtopics)
+
+
+def _suggest_subtopics(db: Session, llm: LLMClient, session_id: uuid.UUID, context: InterviewContext) -> InterviewContext:
+    """The context with concrete subtopics from the model, or unchanged if the model fails."""
+    try:
+        suggested = _ask_llm(db, llm, prompts.subtopics_request(context=context), SuggestedSubtopics, session_id=session_id)
+    except LLMUnavailable:
+        return context
+    return context.model_copy(update={"subtopics": suggested.subtopics})
+
+
 def set_context(
-    db: Session, user: User, session_id: uuid.UUID, context: InterviewContext
+    db: Session, user: User, session_id: uuid.UUID, context: InterviewContext, llm: LLMClient | None = None
 ) -> InterviewSession:
+    """Save what the interview is about. With a model, missing or vague subtopics
+    are replaced by concrete ones it suggests; the candidate can change them."""
+    session = get_session(db, user, session_id)
+    _check_context(db, user, session, context)
+    if llm is not None and needs_subtopics(context):
+        context = _suggest_subtopics(db, llm, session.id, context)  # Without a lock: it calls the model.
+
     session = get_session(db, user, session_id, lock=True)
+    _check_context(db, user, session, context)
+    session.context_json = context.model_dump(mode="json")
+    if session.state is SessionState.PREPARING:
+        _move(session, Event.CONTEXT_READY)
+    db.commit()
+    return session
+
+
+def _check_context(db: Session, user: User, session: InterviewSession, context: InterviewContext) -> None:
     if session.state not in (SessionState.PREPARING, SessionState.CONFIGURING):
         raise Conflict("The context can only change before the plan is confirmed.")
     if context.input_model is not session.input_model:
@@ -171,12 +212,6 @@ def set_context(
         )
         if document is None:
             raise InvalidInput("The document was not found.")
-
-    session.context_json = context.model_dump(mode="json")
-    if session.state is SessionState.PREPARING:
-        _move(session, Event.CONTEXT_READY)
-    db.commit()
-    return session
 
 
 def set_config(

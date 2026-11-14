@@ -111,6 +111,17 @@ class InterviewerTurn(LLMOutput):
         return self
 
 
+class SuggestedSubtopics(LLMOutput):
+    """Concrete areas to cover, suggested when the candidate gave none or only vague ones."""
+
+    subtopics: list[ShortText] = Field(min_length=3, max_length=6)
+
+    @model_validator(mode="after")
+    def check_unique(self) -> Self:
+        _unique_ignoring_case(self.subtopics, "subtopics")
+        return self
+
+
 class StyleVerdict(LLMOutput):
     """The style check's judgement of which style a question really is."""
 

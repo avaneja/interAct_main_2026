@@ -133,6 +133,10 @@ class FakeLLM:
                     "Weigh one trade-off.",
                 ],
             }
+        if request.purpose == "suggest_subtopics":
+            topic = hints["topic"]
+            return {"subtopics": [f"{topic} fundamentals", f"{topic} in practice", f"common {topic} pitfalls",
+                                  f"{topic} trade-offs"]}
         if request.purpose == "interviewer_turn":
             # The fake never asks a follow-up, so tests queue a reply to get one.
             return {

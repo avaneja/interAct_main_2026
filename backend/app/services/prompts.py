@@ -28,6 +28,7 @@ PROMPT_VERSIONS = {
     "classify_style": "style-v1",
     "evaluate_answer": "evaluation-v2",
     "interviewer_turn": "turn-v1",
+    "suggest_subtopics": "subtopics-v1",
 }
 
 DATA_TAGS = ("context", "previous_questions", "question", "answer_key", "answer", "conversation")
@@ -75,6 +76,15 @@ EVALUATION_SYSTEM = (
     "Reply with a single JSON object and nothing else."
 )
 
+
+SUBTOPICS_SYSTEM = (
+    "You plan a practice interview. List the main areas a real interviewer would cover for the topic, "
+    "at the candidate's level and for their goal. Each area is a short, concrete noun phrase of two to five words "
+    "(for example 'hash maps' or 'graph traversal', never 'all topics' or 'basics'); "
+    "the areas are distinct and together cover the core of the topic. "
+    f"{DATA_RULE} "
+    "Reply with a single JSON object and nothing else."
+)
 
 TURN_SYSTEM = (
     "You are the interviewer in a spoken practice interview, talking to the candidate on a video call. "
@@ -275,3 +285,19 @@ def interviewer_turn_request(
         user,
         {"follow_ups_left": follow_ups_left, "last_question": next_focus is None, "reply": exchange[-1][1]},
     )
+
+
+def subtopics_request(*, context: InterviewContext) -> LLMRequest:
+    """Concrete areas for a topic whose subtopics are missing or vague."""
+    written = ", ".join(data(subtopic) for subtopic in context.subtopics) or "nothing"
+    user = (
+        "<context>\n"
+        f"Interview topic: {data(context.topic)}\n"
+        f"Candidate's goal: {data(context.goal or 'general practice')}\n"
+        f"Candidate's level: {context.level or 'not given'}\n"
+        f"What the candidate wrote as the focus: {written}\n"
+        "</context>\n\n"
+        "List 4 to 6 areas to cover.\n"
+        'Reply with exactly this JSON shape: {"subtopics": ["<area>", "<area>", "<area>", "<area>"]}'
+    )
+    return _request("suggest_subtopics", SUBTOPICS_SYSTEM, user, {"topic": context.topic})
