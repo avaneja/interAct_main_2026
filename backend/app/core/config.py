@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -7,6 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 DEV_SESSION_SECRET = "development-only-session-secret-do-not-use-in-production"
+# INTERACT_ENV_FILE names another settings file; set it to "" to read none.
+# The tests do that, so a developer's own backend/.env never changes them.
+ENV_FILE = os.environ.get("INTERACT_ENV_FILE", str(BACKEND_DIR / ".env")) or None
 
 
 class Settings(BaseSettings):
@@ -17,7 +21,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=BACKEND_DIR / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="forbid",
     )

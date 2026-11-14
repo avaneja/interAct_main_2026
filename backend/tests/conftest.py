@@ -1,3 +1,8 @@
+import os
+
+# Before the app is imported: tests use the built-in defaults, never backend/.env.
+os.environ["INTERACT_ENV_FILE"] = ""
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
