@@ -88,6 +88,7 @@ def answer_one(db, user, llm, text):
     svc.confirm_plan(db, user, session.id)
     question = svc.start(db, user, session.id, llm)
     result = svc.submit_answer(db, user, session.id, question.id, text, llm)
+    svc.finish(db, user, session.id, llm)  # Answers are scored when the interview ends.
     return db.scalar(select(Evaluation)), result
 
 

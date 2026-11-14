@@ -40,7 +40,7 @@ def run_interview(db, user, answers, *, finish_early=False, llm=None, subtopics=
         result = svc.submit_answer(db, user, session.id, question.id, text, llm)
         question = result.next_question
     if finish_early:
-        svc.finish(db, user, session.id)
+        svc.finish(db, user, session.id, llm)
     return session, svc.get_report(db, user, session.id).summary_json
 
 

@@ -8,7 +8,11 @@ rules this module enforces:
 - Submitting the same answer twice creates no second answer, score or question;
   a different answer to an answered question is rejected.
 - State is committed before a function returns, and an answer is committed
-  before the LLM is asked to score it.
+  before any LLM call that depends on it.
+- Answers are scored when the interview ends (the last answer, or ending
+  early), not after each answer, so the conversation never waits for
+  scoring. A score already stored is kept if a later one fails, so retrying
+  continues where scoring stopped.
 - When the LLM fails or returns invalid output after a limited number of
   tries, no score is written; resubmitting the same answer retries.
 - Every LLM reply is stored raw in llm_calls, apart from the validated rows.
@@ -419,8 +423,6 @@ def submit_answer(
         session = get_session(db, user, session_id)
         return SubmitResult(session=session, next_question=current_question(db, user, session_id))
 
-    if db.scalar(select(Evaluation).where(Evaluation.answer_id == answer.id)) is None:
-        _evaluate(db, llm, answer)
     return _advance(db, user, session_id, llm)
 
 
@@ -429,8 +431,8 @@ def _save_answer(
 ) -> Answer | None:
     """Store the answer and move to EVALUATING.
 
-    Returns the answer still waiting to be scored or advanced, or None when
-    this exact answer was already fully processed.
+    Returns the answer still waiting for the interview to move on, or None
+    when this exact answer was already fully processed.
     """
     session = get_session(db, user, session_id, lock=True)
     question = db.scalar(select(Question).where(Question.id == question_id, Question.session_id == session.id))
@@ -443,7 +445,7 @@ def _save_answer(
             raise Conflict("This question has already been answered.")
         latest = _questions(db, session.id)[-1]
         if session.state is SessionState.EVALUATING and question.id == latest.id:
-            return existing  # A retry after a failed evaluation or next question.
+            return existing  # A retry after a failed next step.
         return None
 
     if session.state is not SessionState.IN_PROGRESS:
@@ -462,6 +464,23 @@ def _save_answer(
         db.rollback()
         return _save_answer(db, user, session_id, question_id, text)
     return answer
+
+
+def _score_answers(db: Session, llm: LLMClient, session: InterviewSession) -> None:
+    """Score every answer that has no score yet, in question order.
+
+    Each score is committed as soon as it is made, so if the model fails
+    part way, the scores already made are kept and a retry continues.
+    """
+    query = (
+        select(Answer)
+        .join(Question, Question.id == Answer.question_id)
+        .outerjoin(Evaluation, Evaluation.answer_id == Answer.id)
+        .where(Answer.session_id == session.id, Evaluation.id.is_(None))
+        .order_by(Question.sequence)
+    )
+    for answer in list(db.scalars(query)):
+        _evaluate(db, llm, answer)
 
 
 def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
@@ -549,12 +568,13 @@ def _insufficient_reason(
 
 
 def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
-    """After an answer is scored: finish the interview or ask the next question."""
+    """After an answer: ask the next question, or score every answer and finish."""
     session = get_session(db, user, session_id)
     _, config = _confirmed_plan(session)
     asked = len(_questions(db, session.id))
 
     if asked >= config.question_count:
+        _score_answers(db, llm, session)  # Without a lock: it calls the model.
         session = get_session(db, user, session_id, lock=True)
         if session.state is SessionState.EVALUATING:
             _move(session, Event.BUDGET_REACHED)
@@ -573,7 +593,7 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
 
 
 def retry(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
-    """Finish the step a model failure interrupted: score the saved answer, then move on.
+    """Finish the step a model failure interrupted: the next question, or scoring at the end.
 
     The same as resubmitting the last answer, for a client that no longer has
     its text. Safe to call twice: a second call finds nothing left to do.
@@ -581,10 +601,6 @@ def retry(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> Sub
     session = get_session(db, user, session_id)
     if session.state is not SessionState.EVALUATING:
         raise Conflict("Nothing is waiting to be retried.")
-    latest = _questions(db, session.id)[-1]
-    answer = db.scalar(select(Answer).where(Answer.question_id == latest.id))
-    if db.scalar(select(Evaluation).where(Evaluation.answer_id == answer.id)) is None:
-        _evaluate(db, llm, answer)
     return _advance(db, user, session_id, llm)
 
 
@@ -602,7 +618,14 @@ def resume(db: Session, user: User, session_id: uuid.UUID) -> InterviewSession:
     return session
 
 
-def finish(db: Session, user: User, session_id: uuid.UUID) -> InterviewSession:
+def finish(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> InterviewSession:
+    """End early: score the answers given so far, then write the report.
+
+    If scoring fails, the interview stays open and ending again continues it.
+    """
+    session = get_session(db, user, session_id)
+    next_state(session.state, Event.END_EARLY)  # Fail fast before calling the model.
+    _score_answers(db, llm, session)
     session = get_session(db, user, session_id, lock=True)
     _move(session, Event.END_EARLY)
     _write_report(db, session, ended_early=True)

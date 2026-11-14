@@ -127,6 +127,7 @@ def test_each_answer_is_scored_with_its_styles_rubric(db, user, question_type, r
     session, question = started(db, user, llm, question_type)
 
     svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
+    svc.finish(db, user, session.id, llm)
 
     stored = db.scalar(select(Evaluation))
     assert stored.scores_json["max_score"] == rubric.max_score
@@ -139,6 +140,7 @@ def test_the_evaluation_records_model_rubric_and_prompt_versions(db, user):
     session, question = started(db, user, llm, "CONCEPTUAL")
 
     svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
+    svc.finish(db, user, session.id, llm)
 
     expected = f"fake-llm|reasoning-v1|{prompts.PROMPT_VERSIONS['evaluate_answer']}"
     assert db.scalar(select(Evaluation)).evaluator_version == expected
@@ -149,9 +151,10 @@ def test_scoring_against_the_wrong_rubric_is_rejected_and_retried(db, user):
     session, question = started(db, user, llm, "CONCEPTUAL")
     recall_style = {"criteria": [
         {"name": c.name, "score": 1, "max_score": c.max_score, "reason": "Off rubric."} for c in RECALL.criteria]}
-    llm.queue(json.dumps(recall_style))
+    llm.queue_for("evaluate_answer", json.dumps(recall_style))
 
     svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
+    svc.finish(db, user, session.id, llm)
 
     stored = db.scalar(select(Evaluation))
     assert stored.scores_json["max_score"] == REASONING.max_score

@@ -84,6 +84,7 @@ def test_every_llm_call_and_evaluation_records_its_prompt_version(db):
     svc.confirm_plan(db, user, session.id)
     question = svc.start(db, user, session.id, llm)
     svc.submit_answer(db, user, session.id, question.id, "Indexes avoid scanning every row " * 5, llm)
+    svc.finish(db, user, session.id, llm)
 
     for call in db.scalars(select(LLMCall)):
         assert call.prompt_version == prompts.PROMPT_VERSIONS[call.purpose]

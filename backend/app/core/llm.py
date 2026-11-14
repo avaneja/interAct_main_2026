@@ -63,24 +63,31 @@ FAKE_QUESTIONS = {
 class FakeLLM:
     """A predictable stand-in for a real model, for tests and local development.
 
-    Queued replies are returned first, in order; a queued exception is raised
-    instead. With nothing queued, it builds a valid reply from the request's
-    hints. Every request is kept in `requests` so tests can inspect them.
+    Replies queued for a request's purpose come first, then replies queued
+    for any purpose, in order; a queued exception is raised instead. With
+    nothing queued, it builds a valid reply from the request's hints. Every
+    request is kept in `requests` so tests can inspect them.
     """
 
     model = "fake-llm"
 
     def __init__(self, *replies: str | Exception):
         self._queue: list[str | Exception] = list(replies)
+        self._by_purpose: dict[str, list[str | Exception]] = {}
         self.requests: list[LLMRequest] = []
 
     def queue(self, *replies: str | Exception) -> None:
         self._queue.extend(replies)
 
+    def queue_for(self, purpose: str, *replies: str | Exception) -> None:
+        """Queue replies for one purpose only, such as "evaluate_answer"."""
+        self._by_purpose.setdefault(purpose, []).extend(replies)
+
     def complete(self, request: LLMRequest) -> LLMResponse:
         self.requests.append(request)
-        if self._queue:
-            reply = self._queue.pop(0)
+        queue = self._by_purpose.get(request.purpose) or self._queue
+        if queue:
+            reply = queue.pop(0)
             if isinstance(reply, Exception):
                 raise reply
             return LLMResponse(text=reply, model=self.model)

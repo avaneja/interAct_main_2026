@@ -354,7 +354,9 @@ stateDiagram-v2
 - Answer submission should be idempotent to avoid duplicate questions or scores.
 - Persist state before acknowledging completed operations.
 - On LLM errors, retry safely within limits; do not silently fabricate scores.
-- If evaluation still fails after retries, keep the saved answer and leave the session in `EVALUATING`. Resubmitting the same answer retries evaluation without creating a duplicate; submitting different text for that question is rejected.
+- Answers are scored when the interview ends (after the last answer, or when ending early), not after each answer, so the conversation never waits for scoring. `EVALUATING` means the interviewer is preparing its next step.
+- If that step fails after retries, keep the saved answer and leave the session in `EVALUATING`. Resubmitting the same answer (or `retry`) continues without creating a duplicate; submitting different text for that question is rejected.
+- If scoring at the end fails, the scores already made are kept and the interview stays open; ending again (or `retry` after the last answer) scores only what is left.
 - Keep raw model output separate from validated structured data.
 - Uploaded document text and user answers are untrusted inputs; they must not override system instructions or rubric rules.
 

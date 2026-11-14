@@ -186,7 +186,6 @@ def test_submitting_the_same_answer_twice_returns_the_same_result(client, db_eng
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
     assert count(db_engine, Answer) == 1
-    assert count(db_engine, Evaluation) == 1
     assert count(db_engine, Question) == 2
 
 
@@ -212,19 +211,33 @@ def test_answering_a_question_from_another_session_is_rejected(client):
 # Model failures
 
 
-def test_a_failed_evaluation_returns_503_and_can_be_retried(client, fake_llm, db_engine):
+def test_a_failed_next_step_returns_503_and_can_be_retried(client, fake_llm, db_engine):
     session_id, question = started_session(client)
     fake_llm.queue(LLMError("down"), LLMError("down"))
 
     failed = answer(client, session_id, question["id"])
     assert failed.status_code == 503
-    assert "Nothing was scored" in failed.json()["detail"]
+    assert "Nothing was scored or created" in failed.json()["detail"]
     assert client.get(url(session_id)).json()["state"] == "EVALUATING"
-    assert count(db_engine, Evaluation) == 0
 
     retried = answer(client, session_id, question["id"])
     assert retried.status_code == 200
     assert retried.json()["next_question"]["sequence"] == 2
+    assert count(db_engine, Answer) == 1
+
+
+def test_ending_early_when_scoring_fails_keeps_the_interview_open(client, fake_llm, db_engine):
+    session_id, question = started_session(client)
+    answer(client, session_id, question["id"])
+    fake_llm.queue_for("evaluate_answer", LLMError("down"), LLMError("down"))
+
+    failed = client.post(url(session_id, "finish"))
+    assert failed.status_code == 503
+    assert client.get(url(session_id)).json()["state"] == "IN_PROGRESS"
+
+    ended = client.post(url(session_id, "finish"))
+    assert ended.status_code == 200
+    assert ended.json()["state"] == "COMPLETED"
     assert count(db_engine, Evaluation) == 1
 
 
@@ -314,7 +327,7 @@ def test_the_plan_matches_the_questions_actually_asked(client):
     assert (question["type"], question["competency"]) == (plan[0]["question_type"], plan[0]["competency"])
 
 
-def test_retry_finishes_scoring_after_a_model_failure(client, fake_llm, db_engine):
+def test_retry_finishes_the_step_a_model_failure_interrupted(client, fake_llm, db_engine):
     session_id, question = started_session(client)
     fake_llm.queue(LLMError("down"), LLMError("down"))
     assert answer(client, session_id, question["id"]).status_code == 503
@@ -323,7 +336,7 @@ def test_retry_finishes_scoring_after_a_model_failure(client, fake_llm, db_engin
 
     assert retried.status_code == 200
     assert retried.json()["next_question"]["sequence"] == 2
-    assert count(db_engine, Evaluation) == 1
+    assert count(db_engine, Question) == 2
     assert client.post(url(session_id, "retry")).status_code == 409  # Nothing left to do.
 
 

@@ -115,7 +115,7 @@ def _answer_result(result: svc.SubmitResult) -> AnswerResult:
 
 @router.post("/{session_id}/retry")
 def retry(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> AnswerResult:
-    """Finish scoring the last answer after a model failure, then continue the interview."""
+    """After a model failure, finish the interrupted step: the next question, or the final scoring."""
     return _answer_result(svc.retry(db, user, session_id, llm))
 
 
@@ -130,8 +130,9 @@ def resume(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> SessionVi
 
 
 @router.post("/{session_id}/finish")
-def finish(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> SessionView:
-    return _view(db, svc.finish(db, user, session_id))
+def finish(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> SessionView:
+    """End early. The answers so far are scored first, which can take a while with a local model."""
+    return _view(db, svc.finish(db, user, session_id, llm))
 
 
 @router.get("/{session_id}/report")
