@@ -18,6 +18,7 @@ def db(db_engine, db_session):
 def app_env(monkeypatch):
     def set_env(value):
         monkeypatch.setenv("APP_ENV", value)
+        monkeypatch.setenv("SESSION_SECRET", "x" * 40)  # Production requires a real secret.
         get_settings.cache_clear()
 
     yield set_env

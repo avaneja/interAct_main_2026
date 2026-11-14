@@ -2,10 +2,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+DEV_SESSION_SECRET = "development-only-session-secret-do-not-use-in-production"
 
 
 class Settings(BaseSettings):
@@ -41,6 +42,23 @@ class Settings(BaseSettings):
     google_client_secret: SecretStr = SecretStr("")
     github_client_id: str = ""
     github_client_secret: SecretStr = SecretStr("")
+
+    # Signs the session cookie. Required in production; development uses a
+    # fixed placeholder so the app runs without setup.
+    session_secret: SecretStr = SecretStr("")
+    session_max_age_days: int = Field(default=14, ge=1, le=90)
+
+    @field_validator("session_secret")
+    @classmethod
+    def default_session_secret(cls, value: SecretStr) -> SecretStr:
+        return value if value.get_secret_value() else SecretStr(DEV_SESSION_SECRET)
+
+    @model_validator(mode="after")
+    def require_real_secret_in_production(self) -> "Settings":
+        secret = self.session_secret.get_secret_value()
+        if self.app_env == "production" and (secret == DEV_SESSION_SECRET or len(secret) < 32):
+            raise ValueError("SESSION_SECRET must be a random value of at least 32 characters in production")
+        return self
 
     def oauth_providers(self) -> list[str]:
         """The sign-in providers whose OAuth app is configured."""
