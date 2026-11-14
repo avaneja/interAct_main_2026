@@ -16,6 +16,9 @@ dependencies = [
     "psycopg[binary]~=3.3",
     "httpx2~=2.16",
     "itsdangerous~=2.2",
+    "authlib~=1.9",
+    # Authlib's web client uses httpx; the app and tests use httpx2.
+    "httpx~=0.28.1",
     "alembic~=1.20",
 ]
 
