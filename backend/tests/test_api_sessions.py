@@ -68,7 +68,9 @@ def test_a_full_interview_runs_through_the_api(client):
     for sequence in range(1, 6):
         result = answer(client, session_id, question["id"]).json()
         if sequence < 5:
-            assert result == {"state": "IN_PROGRESS", "completed": False, "next_question": result["next_question"]}
+            assert result == {"state": "IN_PROGRESS", "completed": False, "next_question": result["next_question"],
+                              "reaction": "Thank you, that is a clear answer."}
+            assert result["next_question"]["lead_in"] == "Thank you, that is a clear answer. Let's move on."
             question = result["next_question"]
             assert question["sequence"] == sequence + 1
 
@@ -213,7 +215,7 @@ def test_answering_a_question_from_another_session_is_rejected(client):
 
 def test_a_failed_next_step_returns_503_and_can_be_retried(client, fake_llm, db_engine):
     session_id, question = started_session(client)
-    fake_llm.queue(LLMError("down"), LLMError("down"))
+    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
 
     failed = answer(client, session_id, question["id"])
     assert failed.status_code == 503
@@ -329,7 +331,7 @@ def test_the_plan_matches_the_questions_actually_asked(client):
 
 def test_retry_finishes_the_step_a_model_failure_interrupted(client, fake_llm, db_engine):
     session_id, question = started_session(client)
-    fake_llm.queue(LLMError("down"), LLMError("down"))
+    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
     assert answer(client, session_id, question["id"]).status_code == 503
 
     retried = client.post(url(session_id, "retry"))
@@ -342,9 +344,9 @@ def test_retry_finishes_the_step_a_model_failure_interrupted(client, fake_llm, d
 
 def test_retry_can_fail_again_without_creating_anything(client, fake_llm, db_engine):
     session_id, question = started_session(client)
-    fake_llm.queue(LLMError("down"), LLMError("down"))
+    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
     answer(client, session_id, question["id"])
-    fake_llm.queue(LLMError("down"), LLMError("down"))
+    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
 
     assert client.post(url(session_id, "retry")).status_code == 503
     assert count(db_engine, Evaluation) == 0
@@ -355,8 +357,8 @@ def test_retry_after_the_last_answer_completes_the_interview(client, fake_llm):
     session_id, question = started_session(client)
     for _ in range(4):
         question = answer(client, session_id, question["id"]).json()["next_question"]
-    fake_llm.queue(LLMError("down"), LLMError("down"))
-    answer(client, session_id, question["id"])
+    fake_llm.queue_for("evaluate_answer", LLMError("down"), LLMError("down"))
+    assert answer(client, session_id, question["id"]).status_code == 503  # Scoring at the end failed.
 
     result = client.post(url(session_id, "retry")).json()
 

@@ -133,6 +133,13 @@ class FakeLLM:
                     "Weigh one trade-off.",
                 ],
             }
+        if request.purpose == "interviewer_turn":
+            # The fake never asks a follow-up, so tests queue a reply to get one.
+            return {
+                "reaction": "Thank you, that is a clear answer.",
+                "follow_up": None,
+                "transition": "" if hints["last_question"] else "Let's move on.",
+            }
         raise LLMError(f"FakeLLM has no default reply for purpose '{request.purpose}'")
 
 

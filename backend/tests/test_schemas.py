@@ -176,6 +176,8 @@ def test_question_view_reads_from_a_database_row():
     class Row:
         id = uuid.uuid4()
         sequence = 1
+        follow_up = 0
+        lead_in = None
         type = QuestionType.DIRECT
         competency = "overfitting"
         difficulty = Difficulty.BEGINNER

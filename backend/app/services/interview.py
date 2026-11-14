@@ -26,6 +26,11 @@ rules this module enforces:
   grading, and the report says so.
 - A question that misses its requested style is regenerated once, then kept
   and flagged with the reason.
+- After each reply the interviewer reacts to it and either asks a follow-up
+  (at most MAX_FOLLOW_UPS per planned question) or moves on with a
+  transition. Follow-ups do not count toward the question budget; each
+  planned question is scored together with its follow-ups. If the model
+  fails at this step, the interview simply moves on without a reaction.
 
 LLM calls happen without holding a row lock. Each one is committed to
 llm_calls on its own, and the session is locked again and re-checked before
@@ -62,12 +67,14 @@ from app.schemas import (
     GeneratedQuestion,
     InterviewConfig,
     InterviewContext,
+    InterviewerTurn,
     StyleVerdict,
 )
 from app.services import prompts
 from app.services.evidence import (
     REMOVED_MARKER,
     EvidenceCheck,
+    asks_for_answer_or_score,
     non_answer_reason,
     remove_grader_instructions,
     shares_no_terms,
@@ -80,6 +87,7 @@ from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
 STYLE_ATTEMPTS = 2
+MAX_FOLLOW_UPS = 2
 
 
 class InterviewError(Exception):
@@ -106,6 +114,8 @@ class LLMUnavailable(InterviewError):
 class SubmitResult:
     session: InterviewSession
     next_question: Question | None
+    # What the interviewer says about the answer just given.
+    reaction: str | None = None
 
 
 # Loading and moving sessions
@@ -296,7 +306,16 @@ def _rubric_row(db: Session, spec: RubricSpec) -> Rubric:
 
 
 def _questions(db: Session, session_id: uuid.UUID) -> list[Question]:
-    return list(db.scalars(select(Question).where(Question.session_id == session_id).order_by(Question.sequence)))
+    """Every question asked so far, follow-ups included, in the order asked."""
+    query = select(Question).where(Question.session_id == session_id).order_by(Question.sequence, Question.follow_up)
+    return list(db.scalars(query))
+
+
+def _planned_asked(db: Session, session_id: uuid.UUID) -> int:
+    query = select(func.count()).select_from(Question).where(
+        Question.session_id == session_id, Question.follow_up == 0
+    )
+    return db.scalar(query)
 
 
 def _unanswered(db: Session, session_id: uuid.UUID) -> Question | None:
@@ -304,9 +323,20 @@ def _unanswered(db: Session, session_id: uuid.UUID) -> Question | None:
         select(Question)
         .outerjoin(Answer, Answer.question_id == Question.id)
         .where(Question.session_id == session_id, Answer.id.is_(None))
-        .order_by(Question.sequence)
+        .order_by(Question.sequence, Question.follow_up)
     )
     return db.scalar(query)
+
+
+def _exchange(db: Session, question: Question) -> list[tuple[Question, Answer]]:
+    """A planned question and its follow-ups, each with its answer, for those answered so far."""
+    query = (
+        select(Question, Answer)
+        .join(Answer, Answer.question_id == Question.id)
+        .where(Question.session_id == question.session_id, Question.sequence == question.sequence)
+        .order_by(Question.follow_up)
+    )
+    return [(asked, given) for asked, given in db.execute(query).all()]
 
 
 @dataclass
@@ -419,9 +449,14 @@ def submit_answer(
 ) -> SubmitResult:
     answer = _save_answer(db, user, session_id, question_id, text)
     if answer is None:
-        # Already fully processed: return where the interview is now.
+        # Already fully processed: return where the interview is now, with the same reaction.
         session = get_session(db, user, session_id)
-        return SubmitResult(session=session, next_question=current_question(db, user, session_id))
+        given = db.scalar(select(Answer).where(Answer.question_id == question_id))
+        return SubmitResult(
+            session=session,
+            next_question=current_question(db, user, session_id),
+            reaction=given.reaction if given else None,
+        )
 
     return _advance(db, user, session_id, llm)
 
@@ -476,7 +511,8 @@ def _score_answers(db: Session, llm: LLMClient, session: InterviewSession) -> No
         select(Answer)
         .join(Question, Question.id == Answer.question_id)
         .outerjoin(Evaluation, Evaluation.answer_id == Answer.id)
-        .where(Answer.session_id == session.id, Evaluation.id.is_(None))
+        # Follow-up answers are scored as part of their planned question's answer.
+        .where(Answer.session_id == session.id, Question.follow_up == 0, Evaluation.id.is_(None))
         .order_by(Question.sequence)
     )
     for answer in list(db.scalars(query)):
@@ -484,14 +520,26 @@ def _score_answers(db: Session, llm: LLMClient, session: InterviewSession) -> No
 
 
 def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
+    """Score a planned question's answer together with the candidate's replies to its follow-ups."""
     question = db.get(Question, answer.question_id)
     rubric = db.get(Rubric, question.rubric_id)
     criteria = rubric.criteria_json
     rubric_label = f"{rubric.name}-v{rubric.version}"
+    follow_ups = [(asked, given) for asked, given in _exchange(db, question) if asked.follow_up > 0]
+
     # Sentences that try to instruct the grader never reach the model.
     graded_text, instructions_removed = remove_grader_instructions(answer.text)
+    replies = [graded_text]
+    for asked, given in follow_ups:
+        graded_reply, removed = remove_grader_instructions(given.text)
+        instructions_removed += removed
+        replies.append(graded_reply)
+        graded_text += f"\n\nFollow-up question: {asked.prompt}\nCandidate's reply: {graded_reply}"
+    # Everything the candidate said, for checking quotes: never the interviewer's own words.
+    candidate_text = "\n".join([answer.text, *(given.text for _, given in follow_ups)])
 
-    non_answer = non_answer_reason(graded_text.replace(REMOVED_MARKER, ""))
+    reasons = [non_answer_reason(reply.replace(REMOVED_MARKER, "")) for reply in replies]
+    non_answer = reasons[0] if all(reasons) else None
     if non_answer is not None:
         # Nothing to grade: score zero without asking a model, which might invent credit.
         checked = EvidenceCheck(_ungraded(criteria, question.competency, non_answer), verified=0, removed=[])
@@ -515,8 +563,8 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
 
         evaluation = _ask_llm(db, llm, request, AnswerEvaluation, session_id=answer.session_id, check=matches_rubric)
         # Quotes not found in the answer are dropped, so only the candidate's own words are shown.
-        checked = verify_evidence(evaluation, answer.text)
-        insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer)
+        checked = verify_evidence(evaluation, candidate_text)
+        insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer, candidate_text)
         if insufficient_reason and not checked.evaluation.insufficient_evidence:
             checked.evaluation = checked.evaluation.model_copy(update={"insufficient_evidence": True})
         evaluator_version = f"{llm.model}|{rubric_label}|{request.prompt_version}"
@@ -552,7 +600,7 @@ def _ungraded(criteria: list[dict], competency: str, reason: str) -> AnswerEvalu
 
 
 def _insufficient_reason(
-    db: Session, evaluation: AnswerEvaluation, question: Question, answer: Answer
+    db: Session, evaluation: AnswerEvaluation, question: Question, answer: Answer, candidate_text: str
 ) -> str | None:
     """Why this answer cannot support a confident score, or None."""
     if evaluation.insufficient_evidence:
@@ -562,34 +610,113 @@ def _insufficient_reason(
         reference = " ".join(
             [question.prompt, question.competency, context.get("topic", ""), *context.get("subtopics", [])]
         )
-        if shares_no_terms(answer.text, reference):
+        if shares_no_terms(candidate_text, reference):
             return "the answer does not address the question or its topic"
     return None
 
 
-def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
-    """After an answer: ask the next question, or score every answer and finish."""
-    session = get_session(db, user, session_id)
-    _, config = _confirmed_plan(session)
-    asked = len(_questions(db, session.id))
+def _first_name(user: User) -> str | None:
+    name = (user.display_name or "").strip()
+    return name.split()[0] if name else None
 
-    if asked >= config.question_count:
+
+def _interviewer_turn(
+    db: Session,
+    llm: LLMClient,
+    session: InterviewSession,
+    user: User,
+    latest: Question,
+    next_focus: str | None,
+) -> InterviewerTurn:
+    """What the interviewer says after the latest reply. Never raises: on a model
+    failure the interview just moves on without a reaction."""
+    context, _ = _confirmed_plan(session)
+    follow_ups_left = MAX_FOLLOW_UPS - latest.follow_up
+    exchange = [(asked.prompt, given.text) for asked, given in _exchange(db, latest)]
+    request = prompts.interviewer_turn_request(
+        topic=context.topic,
+        candidate_name=_first_name(user),
+        exchange=exchange,
+        follow_ups_left=follow_ups_left,
+        next_focus=next_focus,
+        asks_for_help=asks_for_answer_or_score(exchange[-1][1]),
+    )
+    try:
+        turn = _ask_llm(db, llm, request, InterviewerTurn, session_id=session.id)
+    except LLMUnavailable:
+        return InterviewerTurn()
+    # The limits hold even if the model ignores them.
+    if follow_ups_left <= 0:
+        turn.follow_up = None
+    if next_focus is None:
+        turn.transition = ""
+    return turn
+
+
+def _spoken(*parts: str) -> str | None:
+    return " ".join(part.strip() for part in parts if part and part.strip()) or None
+
+
+def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
+    """After a reply: the interviewer reacts, then asks a follow-up, asks the next
+    planned question, or scores every answer and finishes."""
+    session = get_session(db, user, session_id)
+    context, config = _confirmed_plan(session)
+    latest = _questions(db, session.id)[-1]
+    planned = _planned_asked(db, session.id)
+    last = planned >= config.question_count
+    next_focus = None if last else competency_for(context.topic, context.subtopics, planned + 1)
+
+    turn = _interviewer_turn(db, llm, session, user, latest, next_focus)
+    reaction = _spoken(turn.reaction)
+    replied_to = db.scalar(select(Answer).where(Answer.question_id == latest.id))
+
+    def keep_reaction() -> None:
+        # Stored with the step it belongs to, so a repeated submit gets the same reply.
+        if replied_to.reaction is None:
+            replied_to.reaction = reaction
+
+    if turn.follow_up:
+        session = get_session(db, user, session_id, lock=True)
+        if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:
+            db.add(
+                Question(
+                    session_id=session.id,
+                    sequence=latest.sequence,
+                    follow_up=latest.follow_up + 1,
+                    type=latest.type,
+                    competency=latest.competency,
+                    difficulty=latest.difficulty,
+                    prompt=turn.follow_up,
+                    lead_in=reaction,
+                    rubric_id=latest.rubric_id,
+                )
+            )
+            keep_reaction()
+            _move(session, Event.NEXT_QUESTION)
+            db.commit()
+        return SubmitResult(session=session, next_question=_unanswered(db, session.id), reaction=replied_to.reaction)
+
+    if last:
         _score_answers(db, llm, session)  # Without a lock: it calls the model.
         session = get_session(db, user, session_id, lock=True)
         if session.state is SessionState.EVALUATING:
+            keep_reaction()
             _move(session, Event.BUDGET_REACHED)
             _write_report(db, session, ended_early=False)
             db.commit()
-        return SubmitResult(session=session, next_question=None)
+        return SubmitResult(session=session, next_question=None, reaction=replied_to.reaction)
 
-    checked = _generate_question(db, llm, session, sequence=asked + 1)
+    checked = _generate_question(db, llm, session, sequence=planned + 1)
     rubric_id = _rubric_row(db, rubric_for(checked.generated.type)).id  # Before the lock: it may commit.
     session = get_session(db, user, session_id, lock=True)
     if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:
-        _add_question(db, session, checked, sequence=asked + 1, rubric_id=rubric_id)
+        question = _add_question(db, session, checked, sequence=planned + 1, rubric_id=rubric_id)
+        question.lead_in = _spoken(turn.reaction, turn.transition)
+        keep_reaction()
         _move(session, Event.NEXT_QUESTION)
         db.commit()
-    return SubmitResult(session=session, next_question=_unanswered(db, session.id))
+    return SubmitResult(session=session, next_question=_unanswered(db, session.id), reaction=replied_to.reaction)
 
 
 def retry(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
@@ -648,7 +775,11 @@ def get_report(db: Session, user: User, session_id: uuid.UUID) -> Report:
 
 
 def question_counts(db: Session, session_id: uuid.UUID) -> tuple[int, int]:
-    """(questions asked, questions answered) for a session."""
-    asked = db.scalar(select(func.count()).select_from(Question).where(Question.session_id == session_id))
-    answered = db.scalar(select(func.count()).select_from(Answer).where(Answer.session_id == session_id))
-    return asked, answered
+    """(planned questions asked, planned questions answered) for a session. Follow-ups are not counted."""
+    answered = db.scalar(
+        select(func.count())
+        .select_from(Answer)
+        .join(Question, Question.id == Answer.question_id)
+        .where(Answer.session_id == session_id, Question.follow_up == 0)
+    )
+    return _planned_asked(db, session_id), answered

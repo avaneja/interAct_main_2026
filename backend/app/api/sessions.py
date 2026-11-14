@@ -110,6 +110,7 @@ def _answer_result(result: svc.SubmitResult) -> AnswerResult:
         state=result.session.state,
         next_question=QuestionView.model_validate(result.next_question) if result.next_question else None,
         completed=result.session.state is SessionState.COMPLETED,
+        reaction=result.reaction,
     )
 
 

@@ -132,3 +132,21 @@ def verify_evidence(evaluation: AnswerEvaluation, answer: str) -> EvidenceCheck:
             verified += 1
         criteria.append(criterion)
     return EvidenceCheck(evaluation.model_copy(update={"criteria": criteria}), verified, removed)
+
+
+# Requests for the answer or a score, said to the interviewer. Broader than
+# the grader check above: it only tells the interviewer to decline politely,
+# and never changes what is graded.
+_ASKS_FOR_HELP = re.compile(
+    r"\b(tell|give|show)\s+(me|us)\s+(the\s+)?(correct\s+|right\s+)?(answer|solution)"
+    r"|\bwhat('?s|\s+is)\s+the\s+(correct\s+|right\s+)?(answer|solution)"
+    r"|\b(give|award|assign)\s+me\s+(a\s+)?(\d+|full|perfect|max(imum)?|top|high|good)\b"
+    r"|\b(score|grade|mark|rate)\s+(this|me|my\s+answer)\b"
+    r"|\b(full\s+marks|10\s*/\s*10|100\s*%|a\s+100)\b",
+    re.IGNORECASE,
+)
+
+
+def asks_for_answer_or_score(reply: str) -> bool:
+    """True if the reply asks the interviewer for the answer or for a score."""
+    return bool(_ASKS_FOR_HELP.search(reply))

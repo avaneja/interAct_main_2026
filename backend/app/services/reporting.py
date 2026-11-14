@@ -31,7 +31,15 @@ def _aware(moment: datetime) -> datetime:
 def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -> dict[str, Any]:
     context = session.context_json or {}
     config = session.config_json or {}
-    questions = list(db.scalars(select(Question).where(Question.session_id == session.id).order_by(Question.sequence)))
+    asked = list(
+        db.scalars(select(Question).where(Question.session_id == session.id).order_by(Question.sequence, Question.follow_up))
+    )
+    # Planned questions are reported and scored; follow-ups are listed under the question they follow.
+    questions = [question for question in asked if question.follow_up == 0]
+    follow_ups: dict[int, list[Question]] = {}
+    for question in asked:
+        if question.follow_up > 0:
+            follow_ups.setdefault(question.sequence, []).append(question)
 
     entries: list[dict[str, Any]] = []
     competencies: dict[str, dict[str, Any]] = {}
@@ -52,6 +60,11 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
             "difficulty": question.difficulty.value,
             "prompt": question.prompt,
             "answer": answer.text if answer else None,
+            "follow_ups": [
+                {"prompt": follow_up.prompt, "answer": reply.text if reply else None}
+                for follow_up in follow_ups.get(question.sequence, [])
+                for reply in [db.scalar(select(Answer).where(Answer.question_id == follow_up.id))]
+            ],
             "evaluation": None,
             "better_answer_outline": [],
             # Revealed only once the question has been answered.

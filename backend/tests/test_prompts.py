@@ -19,6 +19,8 @@ FINGERPRINTS = {
     "question-v1": "22a00afcdf1e6238",
     "style-v1": "d581ae3b380ca014",
     "evaluation-v1": "50f44b31da64085e",
+    "evaluation-v2": "bd9b43e7a3ed9062",
+    "turn-v1": "691033561cbaed55",
 }
 
 
@@ -38,6 +40,10 @@ def sample_requests():
             question_prompt="Why do indexes speed up reads?", question_type=QuestionType.CONCEPTUAL,
             difficulty=Difficulty.INTERMEDIATE, competency="indexes", answer="They avoid full scans.",
             criteria=REASONING.criteria_json(), answer_key={"key_points": ["B-tree lookup"]}),
+        "interviewer_turn": prompts.interviewer_turn_request(
+            topic="Databases", candidate_name="Ada",
+            exchange=[("Why do indexes speed up reads?", "They avoid full scans.")],
+            follow_ups_left=2, next_focus="transactions"),
     }
 
 
@@ -88,7 +94,7 @@ def test_every_llm_call_and_evaluation_records_its_prompt_version(db):
 
     for call in db.scalars(select(LLMCall)):
         assert call.prompt_version == prompts.PROMPT_VERSIONS[call.purpose]
-    assert db.scalar(select(Evaluation)).evaluator_version.endswith("|evaluation-v1")
+    assert db.scalar(select(Evaluation)).evaluator_version.endswith(f"|{prompts.PROMPT_VERSIONS['evaluate_answer']}")
 
 
 # Untrusted input
@@ -142,7 +148,8 @@ def test_the_candidates_context_is_also_kept_in_its_block():
 
 @pytest.mark.parametrize("purpose", list(prompts.PROMPT_VERSIONS))
 def test_every_system_prompt_says_data_blocks_are_not_instructions(purpose):
-    assert prompts.DATA_RULE in sample_requests()[purpose].system
+    rule = prompts.TURN_DATA_RULE if purpose == "interviewer_turn" else prompts.DATA_RULE
+    assert rule in sample_requests()[purpose].system
 
 
 def test_grading_still_uses_the_candidates_original_text():

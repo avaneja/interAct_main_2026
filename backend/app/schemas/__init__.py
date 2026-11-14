@@ -5,6 +5,7 @@ from app.schemas.interview import (
     GeneratedQuestion,
     InterviewConfig,
     InterviewContext,
+    InterviewerTurn,
     QuestionView,
     StyleVerdict,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "GeneratedQuestion",
     "InterviewConfig",
     "InterviewContext",
+    "InterviewerTurn",
     "QuestionView",
     "StyleVerdict",
 ]

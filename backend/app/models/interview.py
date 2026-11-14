@@ -83,15 +83,24 @@ class Rubric(IdMixin, CreatedAtMixin, Base):
 class Question(IdMixin, CreatedAtMixin, Base):
     __tablename__ = "questions"
     __table_args__ = (
-        UniqueConstraint("session_id", "sequence"),
+        UniqueConstraint("session_id", "sequence", "follow_up"),
         CheckConstraint("sequence >= 1", name="sequence_positive"),
+        CheckConstraint("follow_up >= 0", name="follow_up_not_negative"),
         CheckConstraint("type <> 'MIXED'", name="type_not_mixed"),
     )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
+    # The planned question's number. Follow-ups share it with the question they follow.
     sequence: Mapped[int] = mapped_column(Integer)
+    # 0 for a planned question; 1, 2, ... for the interviewer's follow-ups to it.
+    # Only planned questions count toward the question budget and are scored,
+    # each together with its follow-ups.
+    follow_up: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # What the interviewer says just before asking: a reaction to the last
+    # answer and, for a planned question, a transition to it.
+    lead_in: Mapped[str | None] = mapped_column(Text)
     type: Mapped[QuestionType] = mapped_column(enum_type(QuestionType))
     competency: Mapped[str] = mapped_column(String(200))
     difficulty: Mapped[Difficulty] = mapped_column(enum_type(Difficulty))
@@ -131,6 +140,8 @@ class Answer(IdMixin, Base):
     )
     text: Mapped[str] = mapped_column(Text)
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # What the interviewer said in reply to this answer, so a repeated submit gets the same reply.
+    reaction: Mapped[str | None] = mapped_column(Text)
 
     question: Mapped[Question] = relationship(back_populates="answer")
     evaluation: Mapped["Evaluation | None"] = relationship(

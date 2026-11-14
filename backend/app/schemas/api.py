@@ -46,11 +46,18 @@ class AnswerSubmit(BaseModel):
 
 
 class AnswerResult(BaseModel):
-    """What the client gets after answering. Scores stay in the final report."""
+    """What the client gets after answering. Scores stay in the final report.
+
+    `reaction` is what the interviewer says about this answer. It is also the
+    start of the next question's lead_in, so a client that speaks the
+    lead_in should not speak it twice; it is there for the last answer, which
+    has no next question.
+    """
 
     state: SessionState
     next_question: QuestionView | None
     completed: bool
+    reaction: str | None = None
 
 
 class ReportView(BaseModel):

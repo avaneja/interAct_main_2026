@@ -89,6 +89,28 @@ class GeneratedQuestion(LLMOutput):
         return self
 
 
+SpokenText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=600)]
+
+
+class InterviewerTurn(LLMOutput):
+    """What the interviewer says after the candidate's reply.
+
+    `reaction` responds to what the candidate said. `follow_up` is one more
+    question about the same planned question, or empty to move on, when
+    `transition` leads into the next one.
+    """
+
+    reaction: SpokenText = ""
+    follow_up: SpokenText | None = None
+    transition: SpokenText = ""
+
+    @model_validator(mode="after")
+    def blank_means_none(self) -> Self:
+        if self.follow_up is not None and not self.follow_up.strip():
+            self.follow_up = None
+        return self
+
+
 class StyleVerdict(LLMOutput):
     """The style check's judgement of which style a question really is."""
 
@@ -113,6 +135,10 @@ class QuestionView(BaseModel):
 
     id: uuid.UUID
     sequence: int
+    # 0 for a planned question, 1 or more for the interviewer's follow-ups to it.
+    follow_up: int
+    # What the interviewer says just before the question (a reaction and a transition).
+    lead_in: str | None
     type: QuestionType
     competency: str
     difficulty: Difficulty
