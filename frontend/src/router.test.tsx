@@ -1,6 +1,9 @@
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { renderApp } from './test/renderApp'
+
+vi.mock('./api/client', async (importOriginal) =>
+  (await import('./test/mockApi')).mockApiModule(importOriginal))
 
 describe('routing', () => {
   it('shows a not-found page for an unknown address', () => {

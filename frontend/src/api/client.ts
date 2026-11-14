@@ -3,9 +3,12 @@ import type {
   InputModel,
   InterviewConfig,
   InterviewContext,
+  Me,
   QuestionView,
   ReportView,
   SessionView,
+  SignInOptions,
+  SignInProvider,
 } from './types'
 
 // Empty in development (Vite proxies /api to the backend); set
@@ -26,6 +29,27 @@ export class ApiError extends Error {
   get isRetryable(): boolean {
     return this.status === 503 || this.status === 0
   }
+}
+
+type Listener = () => void
+const signedOutListeners = new Set<Listener>()
+
+/**
+ * Call `listener` whenever the server answers 401, which means the user is
+ * signed out (for example their session cookie expired). Returns an unsubscribe.
+ */
+export function onSignedOut(listener: Listener): () => void {
+  signedOutListeners.add(listener)
+  return () => signedOutListeners.delete(listener)
+}
+
+export function notifySignedOut() {
+  signedOutListeners.forEach((listener) => listener())
+}
+
+/** Where the browser goes to sign in with a provider; a full page load, not a fetch. */
+export function signInUrl(provider: SignInProvider, next: string): string {
+  return `${BASE_URL}/auth/${provider}/login?${new URLSearchParams({ next })}`
 }
 
 interface ValidationIssue {
@@ -62,6 +86,7 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
   }
 
   if (!response.ok) {
+    if (response.status === 401) notifySignedOut()
     let detail: unknown
     try {
       detail = (await response.json()).detail
@@ -70,12 +95,17 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
     }
     throw new ApiError(response.status, describe(detail, `The server answered with an error (HTTP ${response.status}).`))
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
 const session = (id: string, action = '') => `/sessions/${encodeURIComponent(id)}${action ? `/${action}` : ''}`
 
 export const api = {
+  me: (signal?: AbortSignal) => request<Me>('GET', '/auth/me', undefined, signal),
+  signInOptions: (signal?: AbortSignal) => request<SignInOptions>('GET', '/auth/providers', undefined, signal),
+  devSignIn: () => request<void>('POST', '/auth/dev/login'),
+  signOut: () => request<void>('POST', '/auth/logout'),
   createSession: (inputModel: InputModel) => request<SessionView>('POST', '/sessions', { input_model: inputModel }),
   listSessions: (signal?: AbortSignal) => request<SessionView[]>('GET', '/sessions', undefined, signal),
   getSession: (id: string, signal?: AbortSignal) => request<SessionView>('GET', session(id), undefined, signal),

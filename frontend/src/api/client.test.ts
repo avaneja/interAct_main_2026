@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, api } from './client'
+import { ApiError, api, onSignedOut, signInUrl } from './client'
 
 function respond(status: number, body: unknown) {
   return vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
@@ -97,5 +97,39 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('aborted', 'AbortError')))
 
     await expect(api.listSessions()).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('returns nothing for an empty 204 reply', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    await expect(api.signOut()).resolves.toBeUndefined()
+  })
+
+  it('tells listeners when the server says the user is signed out', async () => {
+    vi.stubGlobal('fetch', respond(401, { detail: 'You are not signed in.' }))
+    const listener = vi.fn()
+    const stop = onSignedOut(listener)
+
+    const error = await api.listSessions().catch((e: unknown) => e)
+    stop()
+    await api.listSessions().catch(() => undefined)
+
+    expect((error as ApiError).status).toBe(401)
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('does not treat other errors as signing out', async () => {
+    vi.stubGlobal('fetch', respond(404, { detail: 'Session not found.' }))
+    const listener = vi.fn()
+    const stop = onSignedOut(listener)
+
+    await api.getSession('s-1').catch(() => undefined)
+    stop()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('builds the provider sign-in address with the page to return to', () => {
+    expect(signInUrl('google', '/sessions/a b/report')).toBe('/api/v1/auth/google/login?next=%2Fsessions%2Fa+b%2Freport')
   })
 })

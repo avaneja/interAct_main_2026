@@ -1,4 +1,4 @@
-import type { QuestionView, ReportView, SessionView } from '../api/types'
+import type { Me, QuestionView, ReportView, SessionView } from '../api/types'
 
 export function makeSession(overrides: Partial<SessionView> = {}): SessionView {
   return {
@@ -111,5 +111,16 @@ export function makeReport(): ReportView {
         },
       ],
     },
+  }
+}
+
+export function makeUser(overrides: Partial<Me> = {}): Me {
+  return {
+    id: 'u-1',
+    provider: 'github',
+    email: 'ada@example.com',
+    display_name: 'Ada Lovelace',
+    default_avatar_key: null,
+    ...overrides,
   }
 }

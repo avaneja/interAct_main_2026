@@ -137,3 +137,18 @@ export interface ReportView {
   generated_at: string
   summary: ReportSummary
 }
+
+export type SignInProvider = 'google' | 'github'
+
+export interface Me {
+  id: string
+  provider: SignInProvider | 'dev'
+  email: string | null
+  display_name: string | null
+  default_avatar_key: string | null
+}
+
+export interface SignInOptions {
+  providers: SignInProvider[]
+  dev_login: boolean
+}
