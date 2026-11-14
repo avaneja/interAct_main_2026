@@ -74,9 +74,15 @@ def test_a_full_interview_runs_through_the_api(client):
             question = result["next_question"]
             assert question["sequence"] == sequence + 1
 
-    assert result["completed"] is True
-    assert result["state"] == "COMPLETED"
-    assert result["next_question"] is None
+    # The wrap-up: no question waits, and the candidate may ask the interviewer questions.
+    assert result == {"state": "IN_PROGRESS", "completed": False, "next_question": None,
+                      "reaction": "Thank you, that is a clear answer."}
+    assert client.get(url(session_id, "current-question")).status_code == 404
+    closing = client.post(url(session_id, "chat"), json={"stage": "closing", "text": "No, that's all."}).json()
+    assert closing["done"] is True
+
+    finished = client.post(url(session_id, "finish")).json()
+    assert finished["state"] == "COMPLETED"
 
     report = client.get(url(session_id, "report"))
     assert report.status_code == 200
@@ -353,17 +359,17 @@ def test_retry_can_fail_again_without_creating_anything(client, fake_llm, db_eng
     assert client.get(url(session_id)).json()["state"] == "EVALUATING"
 
 
-def test_retry_after_the_last_answer_completes_the_interview(client, fake_llm):
+def test_finishing_after_the_last_answer_can_be_retried_when_scoring_fails(client, fake_llm):
     session_id, question = started_session(client)
-    for _ in range(4):
+    for _ in range(5):
         question = answer(client, session_id, question["id"]).json()["next_question"]
     fake_llm.queue_for("evaluate_answer", LLMError("down"), LLMError("down"))
-    assert answer(client, session_id, question["id"]).status_code == 503  # Scoring at the end failed.
 
-    result = client.post(url(session_id, "retry")).json()
+    assert client.post(url(session_id, "finish")).status_code == 503
+    assert client.get(url(session_id)).json()["state"] == "IN_PROGRESS"
 
-    assert result["completed"] is True
-    assert client.get(url(session_id, "report")).status_code == 200
+    assert client.post(url(session_id, "finish")).json()["state"] == "COMPLETED"
+    assert client.get(url(session_id, "report")).json()["summary"]["ended_early"] is False
 
 
 def test_retry_is_refused_when_nothing_failed(client):

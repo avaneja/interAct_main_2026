@@ -17,11 +17,12 @@ class Event(StrEnum):
     PLAN_CONFIRMED = "PLAN_CONFIRMED"
     START = "START"
     SUBMIT_ANSWER = "SUBMIT_ANSWER"
+    # The interviewer's next step: a follow-up, the next planned question, or the wrap-up.
     NEXT_QUESTION = "NEXT_QUESTION"
-    BUDGET_REACHED = "BUDGET_REACHED"
     PAUSE = "PAUSE"
     RESUME = "RESUME"
-    END_EARLY = "END_EARLY"
+    # Score every answer and write the report: after the wrap-up, or early.
+    FINISH = "FINISH"
 
 
 TRANSITIONS: dict[tuple[S, Event], S] = {
@@ -30,10 +31,9 @@ TRANSITIONS: dict[tuple[S, Event], S] = {
     (S.READY, Event.START): S.IN_PROGRESS,
     (S.IN_PROGRESS, Event.SUBMIT_ANSWER): S.EVALUATING,
     (S.EVALUATING, Event.NEXT_QUESTION): S.IN_PROGRESS,
-    (S.EVALUATING, Event.BUDGET_REACHED): S.COMPLETED,
     (S.IN_PROGRESS, Event.PAUSE): S.PAUSED,
     (S.PAUSED, Event.RESUME): S.IN_PROGRESS,
-    (S.IN_PROGRESS, Event.END_EARLY): S.COMPLETED,
+    (S.IN_PROGRESS, Event.FINISH): S.COMPLETED,
 }
 
 

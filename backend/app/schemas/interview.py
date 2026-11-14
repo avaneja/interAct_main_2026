@@ -111,6 +111,13 @@ class InterviewerTurn(LLMOutput):
         return self
 
 
+class SmallTalk(LLMOutput):
+    """The interviewer's reply in the warm-up or the closing; `done` ends the closing."""
+
+    reply: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=800)]
+    done: bool = False
+
+
 class SuggestedSubtopics(LLMOutput):
     """Concrete areas to cover, suggested when the candidate gave none or only vague ones."""
 

@@ -9,10 +9,11 @@ rules this module enforces:
   a different answer to an answered question is rejected.
 - State is committed before a function returns, and an answer is committed
   before any LLM call that depends on it.
-- Answers are scored when the interview ends (the last answer, or ending
-  early), not after each answer, so the conversation never waits for
-  scoring. A score already stored is kept if a later one fails, so retrying
-  continues where scoring stopped.
+- Answers are scored when the interview is finished, not after each answer,
+  so the conversation never waits for scoring. After the last planned
+  answer the interview is in its wrap-up (in progress, no question waiting)
+  until it is finished. A score already stored is kept if a later one
+  fails, so finishing again continues where scoring stopped.
 - When the LLM fails or returns invalid output after a limited number of
   tries, no score is written; resubmitting the same answer retries.
 - Every LLM reply is stored raw in llm_calls, apart from the validated rows.
@@ -61,7 +62,7 @@ from app.models import (
     User,
 )
 from app.core.config import get_settings
-from app.models.enums import InputModel, SessionState, StyleStatus, ValidationStatus
+from app.models.enums import AuthProvider, InputModel, SessionState, StyleStatus, ValidationStatus
 from app.schemas import (
     AnswerEvaluation,
     CriterionScore,
@@ -69,6 +70,7 @@ from app.schemas import (
     InterviewConfig,
     InterviewContext,
     InterviewerTurn,
+    SmallTalk,
     StyleVerdict,
     SuggestedSubtopics,
 )
@@ -651,6 +653,9 @@ def _insufficient_reason(
 
 
 def _first_name(user: User) -> str | None:
+    # The development sign-in's "Local test user" is not a person's name.
+    if user.auth_provider is AuthProvider.DEV:
+        return None
     name = (user.display_name or "").strip()
     return name.split()[0] if name else None
 
@@ -694,7 +699,7 @@ def _spoken(*parts: str) -> str | None:
 
 def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
     """After a reply: the interviewer reacts, then asks a follow-up, asks the next
-    planned question, or scores every answer and finishes."""
+    planned question, or, after the last one, moves to the wrap-up."""
     session = get_session(db, user, session_id)
     context, config = _confirmed_plan(session)
     latest = _questions(db, session.id)[-1]
@@ -733,12 +738,11 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
         return SubmitResult(session=session, next_question=_unanswered(db, session.id), reaction=replied_to.reaction)
 
     if last:
-        _score_answers(db, llm, session)  # Without a lock: it calls the model.
+        # The wrap-up: no question waits; finishing scores everything and writes the report.
         session = get_session(db, user, session_id, lock=True)
         if session.state is SessionState.EVALUATING:
             keep_reaction()
-            _move(session, Event.BUDGET_REACHED)
-            _write_report(db, session, ended_early=False)
+            _move(session, Event.NEXT_QUESTION)
             db.commit()
         return SubmitResult(session=session, next_question=None, reaction=replied_to.reaction)
 
@@ -755,7 +759,7 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
 
 
 def retry(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> SubmitResult:
-    """Finish the step a model failure interrupted: the next question, or scoring at the end.
+    """Finish the step a model failure interrupted: the interviewer's next step after the last answer.
 
     The same as resubmitting the last answer, for a client that no longer has
     its text. Safe to call twice: a second call finds nothing left to do.
@@ -781,18 +785,98 @@ def resume(db: Session, user: User, session_id: uuid.UUID) -> InterviewSession:
 
 
 def finish(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> InterviewSession:
-    """End early: score the answers given so far, then write the report.
+    """Finish the interview: score every answer, then write the report.
 
-    If scoring fails, the interview stays open and ending again continues it.
+    Called after the wrap-up, or earlier to end early. If scoring fails, the
+    interview stays open and finishing again continues it.
     """
     session = get_session(db, user, session_id)
-    next_state(session.state, Event.END_EARLY)  # Fail fast before calling the model.
+    next_state(session.state, Event.FINISH)  # Fail fast before calling the model.
+    _, config = _confirmed_plan(session)
     _score_answers(db, llm, session)
     session = get_session(db, user, session_id, lock=True)
-    _move(session, Event.END_EARLY)
-    _write_report(db, session, ended_early=True)
+    _move(session, Event.FINISH)
+    _, answered = question_counts(db, session.id)
+    _write_report(db, session, ended_early=answered < config.question_count)
     db.commit()
     return session
+
+
+def in_wrap_up(db: Session, session: InterviewSession) -> bool:
+    """True after the last planned answer, before the interview is finished."""
+    if session.state is not SessionState.IN_PROGRESS or not session.config_json:
+        return False
+    _, answered = question_counts(db, session.id)
+    return answered >= session.config_json["question_count"] and _unanswered(db, session.id) is None
+
+
+# Small talk around the questions: not scored.
+
+WARM_UP_FALLBACK = "Thanks for sharing that. Let's get into the questions."
+CLOSING_FALLBACK = "Sorry, I didn't quite catch that. Do you have any other questions for me?"
+ANY_OTHER_QUESTIONS = "Do you have any other questions?"
+_SENTENCES = re.compile(r"(?<=[.!?])\s+")
+
+
+def _warm_up_words(reply: str) -> str:
+    """The warm-up reply without questions, since the call moves on to the interview
+    questions straight after it, ending by saying so."""
+    kept = [sentence for sentence in _SENTENCES.split(reply.strip()) if sentence and not sentence.endswith("?")]
+    if not kept:
+        return WARM_UP_FALLBACK
+    words = " ".join(kept)
+    if "question" not in words.lower():
+        words += " Let's get into the questions."
+    return words
+
+
+def _closing_words(reply: str, done: bool) -> str:
+    """The closing reply, ending with an invitation to ask more unless the call is over."""
+    if not done and not reply.rstrip().endswith("?"):
+        return f"{reply.rstrip()} {ANY_OTHER_QUESTIONS}"
+    return reply
+_NOTHING_MORE = re.compile(
+    r"^\W*(no|nope|nah|none|nothing|not really|i'?m good|i'?m fine|that'?s (all|it|everything)|"
+    r"no(,)? (thanks|thank you|more questions|questions)|thanks?( you)?|bye|goodbye)\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class ChatReply:
+    reply: str
+    done: bool
+
+
+def chat(db: Session, user: User, session_id: uuid.UUID, stage: str, text: str, llm: LLMClient) -> ChatReply:
+    """The interviewer's reply in the warm-up ("tell me about yourself") or the closing
+    ("any questions for me?"). Nothing here is scored, and a model failure never
+    stops the interview: a plain fallback line is used instead."""
+    session = get_session(db, user, session_id)
+    context, _ = _confirmed_plan(session)
+    name = _first_name(user)
+    if stage == "warm_up":
+        if session.state is not SessionState.IN_PROGRESS:
+            raise Conflict("The warm-up is part of a running interview.")
+        request = prompts.warm_up_request(topic=context.topic, candidate_name=name, introduction=text)
+        try:
+            reply = _ask_llm(db, llm, request, SmallTalk, session_id=session.id)
+        except LLMUnavailable:
+            return ChatReply(WARM_UP_FALLBACK, done=True)
+        return ChatReply(_warm_up_words(reply.reply), done=True)
+
+    if not in_wrap_up(db, session):
+        raise Conflict("Questions for the interviewer come after the last question.")
+    nothing_more = bool(_NOTHING_MORE.match(text))
+    request = prompts.closing_request(topic=context.topic, candidate_name=name, question=text)
+    try:
+        reply = _ask_llm(db, llm, request, SmallTalk, session_id=session.id)
+    except LLMUnavailable:
+        if nothing_more:
+            return ChatReply(f"Thanks for your time{', ' + name if name else ''}. Goodbye.", done=True)
+        return ChatReply(CLOSING_FALLBACK, done=False)
+    done = reply.done or nothing_more
+    return ChatReply(_closing_words(reply.reply, done), done=done)
 
 
 # Reports

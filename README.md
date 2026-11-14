@@ -339,11 +339,10 @@ stateDiagram-v2
     CONFIGURING --> READY: User confirms plan
     READY --> IN_PROGRESS: Start
     IN_PROGRESS --> EVALUATING: Submit answer
-    EVALUATING --> IN_PROGRESS: Next question
-    EVALUATING --> COMPLETED: Question budget reached
+    EVALUATING --> IN_PROGRESS: Follow-up, next question or wrap-up
     IN_PROGRESS --> PAUSED: Exit or disconnect
     PAUSED --> IN_PROGRESS: Resume
-    IN_PROGRESS --> COMPLETED: End early
+    IN_PROGRESS --> COMPLETED: Finish (scores every answer)
     COMPLETED --> [*]
 ```
 
@@ -354,9 +353,9 @@ stateDiagram-v2
 - Answer submission should be idempotent to avoid duplicate questions or scores.
 - Persist state before acknowledging completed operations.
 - On LLM errors, retry safely within limits; do not silently fabricate scores.
-- Answers are scored when the interview ends (after the last answer, or when ending early), not after each answer, so the conversation never waits for scoring. `EVALUATING` means the interviewer is preparing its next step.
+- Answers are scored when the interview is finished, not after each answer, so the conversation never waits for scoring. `EVALUATING` means the interviewer is preparing its next step. After the last planned answer (and its follow-ups) the session is back `IN_PROGRESS` with no question waiting: the wrap-up, where the candidate can ask the interviewer questions. Finishing, then or earlier, scores every answer and writes the report; it is marked as ended early only if planned questions were left unanswered.
 - If that step fails after retries, keep the saved answer and leave the session in `EVALUATING`. Resubmitting the same answer (or `retry`) continues without creating a duplicate; submitting different text for that question is rejected.
-- If scoring at the end fails, the scores already made are kept and the interview stays open; ending again (or `retry` after the last answer) scores only what is left.
+- If scoring fails while finishing, the scores already made are kept and the interview stays open; finishing again scores only what is left.
 - Keep raw model output separate from validated structured data.
 - Uploaded document text and user answers are untrusted inputs; they must not override system instructions or rubric rules.
 

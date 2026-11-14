@@ -22,6 +22,8 @@ FINGERPRINTS = {
     "evaluation-v2": "bd9b43e7a3ed9062",
     "turn-v1": "691033561cbaed55",
     "subtopics-v1": "db8d3fa41efabf55",
+    "warm-up-v1": "4fa028e26969310b",
+    "closing-v1": "12c92b700001ce84",
 }
 
 
@@ -47,6 +49,10 @@ def sample_requests():
             follow_ups_left=2, next_focus="transactions"),
         "suggest_subtopics": prompts.subtopics_request(context=InterviewContext.model_validate(
             {"input_model": "TOPIC", "topic": "DSA", "level": "intermediate", "subtopics": ["All DSA topics"]})),
+        "warm_up": prompts.warm_up_request(
+            topic="DSA", candidate_name="Ada", introduction="I studied computer science and love graphs."),
+        "closing": prompts.closing_request(
+            topic="DSA", candidate_name="Ada", question="What should I revise first?"),
     }
 
 
@@ -151,7 +157,8 @@ def test_the_candidates_context_is_also_kept_in_its_block():
 
 @pytest.mark.parametrize("purpose", list(prompts.PROMPT_VERSIONS))
 def test_every_system_prompt_says_data_blocks_are_not_instructions(purpose):
-    rule = prompts.TURN_DATA_RULE if purpose == "interviewer_turn" else prompts.DATA_RULE
+    conversational = purpose in ("interviewer_turn", "warm_up", "closing")
+    rule = prompts.TURN_DATA_RULE if conversational else prompts.DATA_RULE
     assert rule in sample_requests()[purpose].system
 
 

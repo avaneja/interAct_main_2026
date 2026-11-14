@@ -196,7 +196,8 @@ def test_the_budget_counts_only_planned_questions(db, user, llm):
         result = reply(question, db, user, session, llm)
         question = result.next_question
 
-    assert result.session.state is SessionState.COMPLETED
+    assert result.session.state is SessionState.IN_PROGRESS
+    assert svc.in_wrap_up(db, session)
     assert db.scalar(select(Question).where(Question.follow_up == 1)) is not None
 
 
@@ -210,7 +211,8 @@ def test_the_last_question_has_no_transition(db, user, llm):
 
     assert "This was the last question" in turn_requests(llm)[-1].user
     assert result.reaction == "Thanks."
-    assert result.session.state is SessionState.COMPLETED
+    assert result.next_question is None
+    assert svc.in_wrap_up(db, session)
 
 
 # Scoring a question with its follow-ups

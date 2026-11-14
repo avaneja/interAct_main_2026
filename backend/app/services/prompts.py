@@ -29,6 +29,8 @@ PROMPT_VERSIONS = {
     "evaluate_answer": "evaluation-v2",
     "interviewer_turn": "turn-v1",
     "suggest_subtopics": "subtopics-v1",
+    "warm_up": "warm-up-v1",
+    "closing": "closing-v1",
 }
 
 DATA_TAGS = ("context", "previous_questions", "question", "answer_key", "answer", "conversation")
@@ -84,6 +86,30 @@ SUBTOPICS_SYSTEM = (
     "the areas are distinct and together cover the core of the topic. "
     f"{DATA_RULE} "
     "Reply with a single JSON object and nothing else."
+)
+
+WARM_UP_SYSTEM = (
+    "You are the interviewer in a spoken practice interview, talking to the candidate on a video call. "
+    "You asked them to tell you a little about themselves and they have answered. "
+    "Reply in one or two warm, natural sentences that pick up something specific they said, "
+    "then say you will move on to the questions. Do not ask another question, judge them or mention scores. "
+    "Speak plain English for listening: no lists, markdown or emoji. "
+    f"{TURN_DATA_RULE} "
+    'Reply with a single JSON object and nothing else: {"reply": "<your words>"}'
+)
+
+CLOSING_SYSTEM = (
+    "You are the interviewer in a spoken practice interview, talking to the candidate on a video call. "
+    "The questions are over and you asked whether they have any questions for you. "
+    "This is a practice interview on InterAct, not a real job: there is no real company, role, salary, "
+    "team or hiring decision. Answer their question briefly and honestly in that light; you may give general "
+    "interview advice or advice about the topic, or say that their report will show their scores and what to "
+    "revise. Never invent facts about a company, salary or hiring outcome, and never reveal scores. "
+    "If they have no more questions, are saying thanks or goodbye, thank them warmly and say goodbye, and set "
+    '"done" to true. Otherwise end by asking whether they have any other questions and set "done" to false. '
+    "Speak plain English for listening: no lists, markdown or emoji. "
+    f"{TURN_DATA_RULE} "
+    'Reply with a single JSON object and nothing else: {"reply": "<your words>", "done": true or false}'
 )
 
 TURN_SYSTEM = (
@@ -301,3 +327,29 @@ def subtopics_request(*, context: InterviewContext) -> LLMRequest:
         'Reply with exactly this JSON shape: {"subtopics": ["<area>", "<area>", "<area>", "<area>"]}'
     )
     return _request("suggest_subtopics", SUBTOPICS_SYSTEM, user, {"topic": context.topic})
+
+
+def warm_up_request(*, topic: str, candidate_name: str | None, introduction: str) -> LLMRequest:
+    """The interviewer's reply to the candidate introducing themselves."""
+    user = (
+        "<context>\n"
+        f"Interview topic: {data(topic)}\n"
+        f"Candidate's first name: {data(candidate_name or 'not given')}\n"
+        "</context>\n\n"
+        f"<conversation>\nInterviewer: Can you tell me a little bit about yourself?\n"
+        f"Candidate: {data(introduction)}\n</conversation>"
+    )
+    return _request("warm_up", WARM_UP_SYSTEM, user, {"text": introduction})
+
+
+def closing_request(*, topic: str, candidate_name: str | None, question: str) -> LLMRequest:
+    """The interviewer's reply to a question the candidate asks at the end."""
+    user = (
+        "<context>\n"
+        f"Interview topic: {data(topic)}\n"
+        f"Candidate's first name: {data(candidate_name or 'not given')}\n"
+        "</context>\n\n"
+        f"<conversation>\nInterviewer: Do you have any questions for me?\n"
+        f"Candidate: {data(question)}\n</conversation>"
+    )
+    return _request("closing", CLOSING_SYSTEM, user, {"text": question})

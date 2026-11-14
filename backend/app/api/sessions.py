@@ -9,7 +9,16 @@ from app.api.deps import LLM, CurrentUser, DbSession
 from app.models import InterviewSession
 from app.models.enums import SessionState
 from app.schemas import InterviewConfig, InterviewContext, QuestionView
-from app.schemas.api import AnswerResult, AnswerSubmit, PlannedQuestion, ReportView, SessionCreate, SessionView
+from app.schemas.api import (
+    AnswerResult,
+    AnswerSubmit,
+    ChatMessage,
+    ChatReplyView,
+    PlannedQuestion,
+    ReportView,
+    SessionCreate,
+    SessionView,
+)
 from app.services import interview as svc
 from app.services.question_styles import competency_for, mix_plan
 
@@ -131,9 +140,17 @@ def resume(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> SessionVi
     return _view(db, svc.resume(db, user, session_id))
 
 
+@router.post("/{session_id}/chat")
+def chat(session_id: uuid.UUID, body: ChatMessage, db: DbSession, user: CurrentUser, llm: LLM) -> ChatReplyView:
+    """Small talk that is not scored: the warm-up while running, or the candidate's questions in the wrap-up."""
+    reply = svc.chat(db, user, session_id, body.stage, body.text, llm)
+    return ChatReplyView(reply=reply.reply, done=reply.done)
+
+
 @router.post("/{session_id}/finish")
 def finish(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> SessionView:
-    """End early. The answers so far are scored first, which can take a while with a local model."""
+    """Score every answer and write the report: after the wrap-up, or early.
+    Scoring can take a while with a local model."""
     return _view(db, svc.finish(db, user, session_id, llm))
 
 

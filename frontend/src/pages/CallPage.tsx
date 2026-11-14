@@ -173,6 +173,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     if (result.completed || !result.next_question) {
       setTurn('closing')
       await say(CLOSING_LINE)
+      // After the last answer the interview waits in its wrap-up; finishing scores every answer.
+      if (!result.completed) await api.finish(initialSession.id)
       if (alive.current) navigate(reportPath)
       return
     }

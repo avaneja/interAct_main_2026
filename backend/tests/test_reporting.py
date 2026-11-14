@@ -27,7 +27,7 @@ def user(db):
     return user
 
 
-def run_interview(db, user, answers, *, finish_early=False, llm=None, subtopics=("processes", "memory", "scheduling")):
+def run_interview(db, user, answers, *, llm=None, subtopics=("processes", "memory", "scheduling")):
     llm = llm or FakeLLM()
     session = svc.create_session(db, user, InputModel.TOPIC)
     svc.set_context(db, user, session.id, InterviewContext.model_validate(
@@ -39,8 +39,8 @@ def run_interview(db, user, answers, *, finish_early=False, llm=None, subtopics=
     for text in answers:
         result = svc.submit_answer(db, user, session.id, question.id, text, llm)
         question = result.next_question
-    if finish_early:
-        svc.finish(db, user, session.id, llm)
+    # Finishing scores every answer; with questions left unanswered it is an early end.
+    svc.finish(db, user, session.id, llm)
     return session, svc.get_report(db, user, session.id).summary_json
 
 
@@ -58,7 +58,7 @@ def test_scores_are_totalled_overall_and_per_competency(db, user):
 
 
 def test_coverage_lists_planned_covered_and_missing_competencies(db, user):
-    _, report = run_interview(db, user, [FULL, FULL], finish_early=True)
+    _, report = run_interview(db, user, [FULL, FULL])
 
     assert report["coverage"] == {
         "planned": ["processes", "memory", "scheduling"],
@@ -97,7 +97,7 @@ def test_each_question_has_its_answer_scores_and_a_better_answer_outline(db, use
 
 
 def test_an_unanswered_question_shows_no_answer_key_or_scores(db, user):
-    _, report = run_interview(db, user, [FULL], finish_early=True)
+    _, report = run_interview(db, user, [FULL])
 
     unanswered = report["questions"][1]
     assert unanswered["answer"] is None

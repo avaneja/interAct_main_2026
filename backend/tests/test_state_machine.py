@@ -64,7 +64,8 @@ def test_a_full_interview_walks_from_preparing_to_completed():
         Event.PAUSE,
         Event.RESUME,
         Event.SUBMIT_ANSWER,
-        Event.BUDGET_REACHED,
+        Event.NEXT_QUESTION,  # The wrap-up after the last answer.
+        Event.FINISH,
     ]:
         state = next_state(state, event)
 

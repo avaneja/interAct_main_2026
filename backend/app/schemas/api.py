@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
@@ -58,6 +58,20 @@ class AnswerResult(BaseModel):
     next_question: QuestionView | None
     completed: bool
     reaction: str | None = None
+
+
+class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stage: Literal["warm_up", "closing"]
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]
+
+
+class ChatReplyView(BaseModel):
+    """The interviewer's reply. `done` is true when the closing conversation is over."""
+
+    reply: str
+    done: bool
 
 
 class ReportView(BaseModel):

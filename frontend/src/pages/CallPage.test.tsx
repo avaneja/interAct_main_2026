@@ -95,13 +95,15 @@ describe('the interview call', () => {
 
   it('closes the call and opens the report after the last answer', async () => {
     atQuestion(last)
-    mockedApi.submitAnswer.mockResolvedValue({ state: 'COMPLETED', next_question: null, completed: true })
+    mockedApi.submitAnswer.mockResolvedValue({ state: 'IN_PROGRESS', next_question: null, completed: false })
+    mockedApi.finish.mockResolvedValue(makeSession({ state: 'COMPLETED' }))
     const { user, router } = await joinCall()
 
     await answer(user, 'A fair, priority-based scheduler.')
 
     await vi.waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/report'))
     expect(spoken).toContain(CLOSING_LINE)
+    expect(mockedApi.finish).toHaveBeenCalledWith('s-1')
   })
 
   it('welcomes the candidate back when the interview was already under way', async () => {

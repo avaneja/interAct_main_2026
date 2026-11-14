@@ -100,9 +100,12 @@ def test_a_full_interview_runs_to_a_report(db, user, llm):
 
     for _ in range(5):
         result = answer_current(db, user, session, llm)
-
-    assert result.session.state is SessionState.COMPLETED
+    assert result.session.state is SessionState.IN_PROGRESS  # The wrap-up.
     assert result.next_question is None
+    assert svc.in_wrap_up(db, session)
+
+    svc.finish(db, user, session.id, llm)
+
     report = svc.get_report(db, user, session.id).summary_json
     assert report["answered_questions"] == 5
     assert report["score"] == report["max_score"] == 5 * REASONING.max_score
@@ -135,12 +138,12 @@ def test_ending_early_writes_a_report_with_the_unanswered_question(db, user, llm
 def test_the_conversation_never_waits_for_scoring(db, user, llm):
     session, _ = started_session(db, user, llm)
 
-    for _ in range(4):
+    for _ in range(5):
         answer_current(db, user, session, llm)
     assert "evaluate_answer" not in [r.purpose for r in llm.requests]
     assert count(db, Evaluation) == 0
 
-    answer_current(db, user, session, llm)  # The last answer: everything is scored, then the report.
+    svc.finish(db, user, session.id, llm)  # Finishing scores everything, then writes the report.
 
     assert [r.purpose for r in llm.requests].count("evaluate_answer") == 5
     assert count(db, Evaluation) == 5
@@ -344,19 +347,20 @@ def test_scores_already_made_are_kept_when_a_later_one_fails(db, user, llm):
     assert [r.purpose for r in llm.requests].count("evaluate_answer") == 4  # 1 kept + 2 failed + 1 retried
 
 
-def test_a_failed_last_step_is_finished_by_retry(db, user, llm):
-    session, _ = started_session(db, user, llm, question_count=5)
-    for _ in range(4):
+def test_the_wrap_up_waits_for_finishing(db, user, llm):
+    session, _ = started_session(db, user, llm)
+    for _ in range(5):
         answer_current(db, user, session, llm)
-    llm.queue_for("evaluate_answer", LLMError("down"), LLMError("down"))
-    with pytest.raises(svc.LLMUnavailable):
-        answer_current(db, user, session, llm)
-    assert db.get(InterviewSession, session.id).state is SessionState.EVALUATING
 
-    result = svc.retry(db, user, session.id, llm)
+    assert svc.current_question(db, user, session.id) is None
+    assert svc.in_wrap_up(db, session)
+    with pytest.raises(svc.Conflict, match="once the interview is completed"):
+        svc.get_report(db, user, session.id)
 
-    assert result.session.state is SessionState.COMPLETED
-    assert count(db, Evaluation) == 5
+    svc.finish(db, user, session.id, llm)
+
+    assert svc.get_report(db, user, session.id).summary_json["ended_early"] is False
+    assert not svc.in_wrap_up(db, session)
 
 
 def test_an_evaluation_that_ignores_the_rubric_is_rejected(db, user, llm):

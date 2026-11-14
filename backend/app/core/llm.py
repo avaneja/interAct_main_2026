@@ -133,6 +133,14 @@ class FakeLLM:
                     "Weigh one trade-off.",
                 ],
             }
+        if request.purpose == "warm_up":
+            return {"reply": "Thanks for sharing that. Let's get started with the questions."}
+        if request.purpose == "closing":
+            # A candidate who writes "no" is done; anything else is answered and asked again.
+            if re.match(r"\W*(no|nope|that's all)\b", hints["text"], re.IGNORECASE):
+                return {"reply": "Thank you for your time. Goodbye.", "done": True}
+            return {"reply": "Good question. Your report will show what to revise. Any other questions?",
+                    "done": False}
         if request.purpose == "suggest_subtopics":
             topic = hints["topic"]
             return {"subtopics": [f"{topic} fundamentals", f"{topic} in practice", f"common {topic} pitfalls",
