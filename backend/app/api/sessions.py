@@ -1,9 +1,11 @@
 """Sessions API. Each route calls the interview service and shapes the response."""
 
+import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
 from app.api.deps import LLM, CurrentUser, DbSession
 from app.models import InterviewSession
@@ -23,6 +25,24 @@ from app.services import interview as svc
 from app.services.question_styles import competency_for, mix_plan
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
+logger = logging.getLogger(__name__)
+
+
+def _prepare_next(db: DbSession, session_id: uuid.UUID, llm: LLM, background: BackgroundTasks) -> None:
+    """After the response, write the next planned question while the candidate answers.
+
+    It runs with its own database session, since the request's is closed by then.
+    """
+    bind = db.get_bind()
+
+    def run() -> None:
+        try:
+            with Session(bind) as own:
+                svc.prepare_next_question(own, session_id, llm)
+        except Exception:
+            logger.exception("Preparing the next question failed; it will be written when needed.")
+
+    background.add_task(run)
 
 
 def _plan(session: InterviewSession) -> list[PlannedQuestion] | None:
@@ -96,8 +116,12 @@ def confirm_plan(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Ses
 
 
 @router.post("/{session_id}/start")
-def start(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> QuestionView:
-    return QuestionView.model_validate(svc.start(db, user, session_id, llm))
+def start(
+    session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM, background: BackgroundTasks
+) -> QuestionView:
+    question = QuestionView.model_validate(svc.start(db, user, session_id, llm))
+    _prepare_next(db, session_id, llm, background)
+    return question
 
 
 @router.get("/{session_id}/current-question")
@@ -110,9 +134,11 @@ def current_question(session_id: uuid.UUID, db: DbSession, user: CurrentUser) ->
 
 @router.post("/{session_id}/answers")
 def submit_answer(
-    session_id: uuid.UUID, body: AnswerSubmit, db: DbSession, user: CurrentUser, llm: LLM
+    session_id: uuid.UUID, body: AnswerSubmit, db: DbSession, user: CurrentUser, llm: LLM, background: BackgroundTasks
 ) -> AnswerResult:
-    return _answer_result(svc.submit_answer(db, user, session_id, body.question_id, body.text, llm))
+    result = _answer_result(svc.submit_answer(db, user, session_id, body.question_id, body.text, llm))
+    _prepare_next(db, session_id, llm, background)
+    return result
 
 
 def _answer_result(result: svc.SubmitResult) -> AnswerResult:
@@ -125,9 +151,13 @@ def _answer_result(result: svc.SubmitResult) -> AnswerResult:
 
 
 @router.post("/{session_id}/retry")
-def retry(session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM) -> AnswerResult:
-    """After a model failure, finish the interrupted step: the next question, or the final scoring."""
-    return _answer_result(svc.retry(db, user, session_id, llm))
+def retry(
+    session_id: uuid.UUID, db: DbSession, user: CurrentUser, llm: LLM, background: BackgroundTasks
+) -> AnswerResult:
+    """After a model failure, finish the interrupted step: the interviewer's next step."""
+    result = _answer_result(svc.retry(db, user, session_id, llm))
+    _prepare_next(db, session_id, llm, background)
+    return result
 
 
 @router.post("/{session_id}/pause")

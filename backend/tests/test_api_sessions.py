@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.llm import LLMError
+from app.core.llm import FakeLLM, LLMError
 from app.models import Answer, Evaluation, Question
 from app.services.rubrics import REASONING
 
@@ -34,6 +34,14 @@ def ready_session(client):
     assert client.put(url(session_id, "config"), json=CONFIG).status_code == 200
     assert client.post(url(session_id, "confirm")).status_code == 200
     return session_id
+
+
+def started_with_question_writing_down(client, fake_llm):
+    """Started, but writing the next question fails, in the background and when needed."""
+    session_id = ready_session(client)
+    fake_llm.queue_for("generate_question", FakeLLM.DEFAULT, *[LLMError("down")] * 4)
+    question = client.post(url(session_id, "start")).json()
+    return session_id, question
 
 
 def started_session(client):
@@ -220,8 +228,7 @@ def test_answering_a_question_from_another_session_is_rejected(client):
 
 
 def test_a_failed_next_step_returns_503_and_can_be_retried(client, fake_llm, db_engine):
-    session_id, question = started_session(client)
-    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
+    session_id, question = started_with_question_writing_down(client, fake_llm)
 
     failed = answer(client, session_id, question["id"])
     assert failed.status_code == 503
@@ -336,8 +343,7 @@ def test_the_plan_matches_the_questions_actually_asked(client):
 
 
 def test_retry_finishes_the_step_a_model_failure_interrupted(client, fake_llm, db_engine):
-    session_id, question = started_session(client)
-    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
+    session_id, question = started_with_question_writing_down(client, fake_llm)
     assert answer(client, session_id, question["id"]).status_code == 503
 
     retried = client.post(url(session_id, "retry"))
@@ -349,8 +355,7 @@ def test_retry_finishes_the_step_a_model_failure_interrupted(client, fake_llm, d
 
 
 def test_retry_can_fail_again_without_creating_anything(client, fake_llm, db_engine):
-    session_id, question = started_session(client)
-    fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
+    session_id, question = started_with_question_writing_down(client, fake_llm)
     answer(client, session_id, question["id"])
     fake_llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
 

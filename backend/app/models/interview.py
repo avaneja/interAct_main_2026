@@ -44,6 +44,9 @@ class InterviewSession(IdMixin, OwnedMixin, CreatedAtMixin, Base):
     )
     context_json: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     config_json: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
+    # The next planned question, written in the background while the candidate
+    # answers, so moving on does not wait for it. Not a question until asked.
+    prepared_json: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )

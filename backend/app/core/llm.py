@@ -70,6 +70,8 @@ class FakeLLM:
     """
 
     model = "fake-llm"
+    # Queue this to get the usual default reply at that point in a queue.
+    DEFAULT = "<default reply>"
 
     def __init__(self, *replies: str | Exception):
         self._queue: list[str | Exception] = list(replies)
@@ -90,7 +92,8 @@ class FakeLLM:
             reply = queue.pop(0)
             if isinstance(reply, Exception):
                 raise reply
-            return LLMResponse(text=reply, model=self.model)
+            if reply != self.DEFAULT:
+                return LLMResponse(text=reply, model=self.model)
         return LLMResponse(text=json.dumps(self._default_reply(request)), model=self.model)
 
     def _default_reply(self, request: LLMRequest) -> dict[str, Any]:

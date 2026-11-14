@@ -27,6 +27,9 @@ rules this module enforces:
   grading, and the report says so.
 - A question that misses its requested style is regenerated once, then kept
   and flagged with the reason.
+- The next planned question is written in the background while the
+  candidate answers (prepare_next_question) and kept on the session until
+  it is asked; if it is not ready, it is written when needed.
 - After each reply the interviewer reacts to it and either asks a follow-up
   (at most MAX_FOLLOW_UPS per planned question) or moves on with a
   transition. Follow-ups do not count toward the question budget; each
@@ -435,6 +438,62 @@ def _generate_question(
     return CheckedQuestion(generated, StyleStatus.FLAGGED, problem)
 
 
+def _prepared(session: InterviewSession, sequence: int) -> CheckedQuestion | None:
+    """The question prepared in the background for `sequence`, if there is a usable one."""
+    prepared = session.prepared_json
+    if not prepared or prepared.get("sequence") != sequence:
+        return None
+    try:
+        return CheckedQuestion(
+            GeneratedQuestion.model_validate(prepared["question"]),
+            StyleStatus(prepared["style_status"]),
+            prepared.get("style_note"),
+        )
+    except (KeyError, ValueError, ValidationError):
+        return None
+
+
+def prepare_next_question(db: Session, session_id: uuid.UUID, llm: LLMClient) -> None:
+    """Write the next planned question ahead of time, while the candidate answers.
+
+    Runs after the response, in the background. It changes nothing the
+    candidate can see: the question is kept on the session and only asked
+    when the interview moves on. A model failure is ignored; the question is
+    then written when it is needed.
+    """
+    session = db.get(InterviewSession, session_id)
+    if session is None or session.state is not SessionState.IN_PROGRESS:
+        return
+    try:
+        _, config = _confirmed_plan(session)
+    except Conflict:
+        return
+    planned = _planned_asked(db, session.id)
+    sequence = planned + 1
+    if sequence > config.question_count or _prepared(session, sequence) is not None:
+        return
+    try:
+        checked = _generate_question(db, llm, session, sequence)  # Without a lock: it calls the model.
+    except LLMUnavailable:
+        return
+    query = (
+        select(InterviewSession)
+        .where(InterviewSession.id == session_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    session = db.scalar(query)
+    if _planned_asked(db, session.id) != planned:
+        return  # The interview moved on while this was being written.
+    session.prepared_json = {
+        "sequence": sequence,
+        "question": checked.generated.model_dump(mode="json"),
+        "style_status": checked.style_status.value,
+        "style_note": checked.style_note,
+    }
+    db.commit()
+
+
 def _add_question(
     db: Session, session: InterviewSession, checked: CheckedQuestion, sequence: int, rubric_id: uuid.UUID
 ) -> Question:
@@ -746,12 +805,14 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
             db.commit()
         return SubmitResult(session=session, next_question=None, reaction=replied_to.reaction)
 
-    checked = _generate_question(db, llm, session, sequence=planned + 1)
+    # Usually written in the background while the candidate answered; otherwise now.
+    checked = _prepared(session, planned + 1) or _generate_question(db, llm, session, sequence=planned + 1)
     rubric_id = _rubric_row(db, rubric_for(checked.generated.type)).id  # Before the lock: it may commit.
     session = get_session(db, user, session_id, lock=True)
     if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:
         question = _add_question(db, session, checked, sequence=planned + 1, rubric_id=rubric_id)
         question.lead_in = _spoken(turn.reaction, turn.transition)
+        session.prepared_json = None
         keep_reaction()
         _move(session, Event.NEXT_QUESTION)
         db.commit()
