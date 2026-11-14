@@ -1,48 +1,33 @@
+import uuid
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.llm import LLMClient, get_llm
+from app.core.sessions import SESSION_USER
 from app.models import User
-from app.models.enums import AuthProvider
 
-DEV_USER_ID = "local-dev"
+DbSession = Annotated[Session, Depends(get_db)]
 
 
-def get_current_user(db: Annotated[Session, Depends(get_db)]) -> User:
-    """Temporary until M4: every request acts as one local developer account.
+def get_optional_user(request: Request, db: DbSession) -> User | None:
+    """The user named in the signed session cookie, or None when signed out."""
+    try:
+        user_id = uuid.UUID(request.session.get(SESSION_USER, ""))
+    except ValueError:
+        return None
+    return db.get(User, user_id)
 
-    Refused in production, so the deployed demo can never run without sign-in.
-    """
-    if get_settings().app_env == "production":
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Sign-in is not available yet.")
 
-    query = select(User).where(
-        User.auth_provider == AuthProvider.DEV, User.provider_user_id == DEV_USER_ID
-    )
-    user = db.scalar(query)
+def get_current_user(user: Annotated[User | None, Depends(get_optional_user)]) -> User:
+    """The signed-in user; every request without one gets 401."""
     if user is None:
-        db.add(
-            User(
-                auth_provider=AuthProvider.DEV,
-                provider_user_id=DEV_USER_ID,
-                display_name="Local developer",
-            )
-        )
-        try:
-            db.commit()
-        except IntegrityError:
-            # Another request created it at the same moment.
-            db.rollback()
-        user = db.scalar(query)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "You are not signed in.")
     return user
 
 
-DbSession = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
 LLM = Annotated[LLMClient, Depends(get_llm)]

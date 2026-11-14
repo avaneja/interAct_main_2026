@@ -44,8 +44,8 @@ def fake_llm():
 
 
 @pytest.fixture
-def client(db_engine, fake_llm):
-    """The real app on a fresh in-memory database, with FakeLLM as the model."""
+def anonymous_client(db_engine, fake_llm):
+    """The real app on a fresh in-memory database, with FakeLLM as the model. Not signed in."""
     Base.metadata.create_all(db_engine)
 
     def test_db():
@@ -57,3 +57,10 @@ def client(db_engine, fake_llm):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client(anonymous_client):
+    """The same app, signed in as the local test user."""
+    assert anonymous_client.post("/api/v1/auth/dev/login").status_code == 204
+    return anonymous_client

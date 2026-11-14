@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.core.config import Settings
 
 SESSION_COOKIE = "interact_session"
+SESSION_USER = "user_id"
 
 
 def add_session_cookie(app: FastAPI, settings: Settings) -> None:

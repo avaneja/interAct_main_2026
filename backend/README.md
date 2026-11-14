@@ -48,7 +48,9 @@ Start the API at http://127.0.0.1:8000, with the health check at `/api/v1/health
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000/docs to try every endpoint in the browser. Until sign-in arrives in M4, every request acts as one local developer account.
+Open http://127.0.0.1:8000/docs to try every endpoint in the browser. Every sessions endpoint needs a signed-in user and answers 401 otherwise. Users only ever see their own sessions; another user's session answers 404, the same as one that does not exist.
+
+To sign in, set up Google or GitHub as described in [docs/oauth-setup.md](../docs/oauth-setup.md). Without them, use the development sign-in: in `/docs`, run `POST /api/v1/auth/dev/login`. It signs you in as a local test user, and the browser keeps the cookie for later requests. It only works when `APP_ENV=development` and `DEV_LOGIN=true`; in production and in tests it answers 404.
 
 The LLM is a predictable fake by default (`LLM_PROVIDER=fake`). Tests always use the fake and never call a real model.
 

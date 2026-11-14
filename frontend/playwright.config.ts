@@ -29,7 +29,7 @@ export default defineConfig({
         'cd ../backend',
         `rm -f "${DATABASE_FILE}"`,
         `DATABASE_URL="${DATABASE}" .venv/bin/alembic upgrade head`,
-        `DATABASE_URL="${DATABASE}" LLM_PROVIDER=fake .venv/bin/uvicorn app.main:app --port ${BACKEND_PORT}`,
+        `DATABASE_URL="${DATABASE}" LLM_PROVIDER=fake APP_ENV=development DEV_LOGIN=true .venv/bin/uvicorn app.main:app --port ${BACKEND_PORT}`,
       ].join(' && '),
       url: `http://127.0.0.1:${BACKEND_PORT}/api/v1/health`,
       reuseExistingServer: false,

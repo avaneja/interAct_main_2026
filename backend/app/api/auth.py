@@ -8,18 +8,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from starlette.responses import RedirectResponse, Response
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentUser, DbSession
 from app.core.config import get_settings
 from app.core.oauth import SignInFailed, SignInProviders, get_sign_in_providers
-from app.models import User
+from app.core.sessions import SESSION_USER
 from app.models.enums import AuthProvider
-from app.services.accounts import upsert_user
+from app.services.accounts import Profile, upsert_user
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 Providers = Annotated[SignInProviders, Depends(get_sign_in_providers)]
-SESSION_USER = "user_id"
 SESSION_NEXT = "next"
+DEV_ACCOUNT_ID = "local-dev"
 
 
 class Me(BaseModel):
@@ -32,6 +32,7 @@ class Me(BaseModel):
 
 class SignInOptions(BaseModel):
     providers: list[str]
+    dev_login: bool
 
 
 def _safe_next(path: str | None) -> str:
@@ -45,19 +46,20 @@ def _frontend(path: str, **query: str) -> str:
     return get_settings().public_url.rstrip("/") + path + (f"?{urlencode(query)}" if query else "")
 
 
-def signed_in_user(request: Request, db: DbSession) -> User | None:
-    """The user in the session cookie, or None."""
-    try:
-        user_id = uuid.UUID(request.session.get(SESSION_USER, ""))
-    except ValueError:
-        return None
-    return db.get(User, user_id)
-
-
 @router.get("/providers")
 def sign_in_options(providers: Providers) -> SignInOptions:
     """Which sign-in buttons to show. Never includes secrets."""
-    return SignInOptions(providers=providers.configured())
+    return SignInOptions(providers=providers.configured(), dev_login=get_settings().dev_login_allowed())
+
+
+@router.post("/dev/login", status_code=status.HTTP_204_NO_CONTENT)
+def dev_login(request: Request, db: DbSession) -> None:
+    """Sign in as a local test user. Development only; production always refuses."""
+    if not get_settings().dev_login_allowed():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Development sign-in is not available.")
+    user = upsert_user(db, Profile(AuthProvider.DEV, DEV_ACCOUNT_ID, None, "Local test user"))
+    request.session.clear()
+    request.session[SESSION_USER] = str(user.id)
 
 
 @router.get("/{provider}/login")
@@ -88,10 +90,7 @@ async def callback(provider: str, request: Request, providers: Providers, db: Db
 
 
 @router.get("/me")
-def me(request: Request, db: DbSession) -> Me:
-    user = signed_in_user(request, db)
-    if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "You are not signed in.")
+def me(user: CurrentUser) -> Me:
     return Me(
         id=user.id,
         provider=user.auth_provider,

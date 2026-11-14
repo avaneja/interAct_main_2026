@@ -8,6 +8,10 @@ const ANSWER =
   'The scheduler decides which one runs next, trading fairness against response time for interactive work.'
 
 test('a topic interview runs from the home page to the report', async ({ page }) => {
+  // Sessions need a signed-in user; the development sign-in sets the browser's cookie.
+  const signIn = await page.request.post('/api/v1/auth/dev/login')
+  expect(signIn.status()).toBe(204)
+
   // Home → topic.
   await page.goto('/')
   await page.getByRole('link', { name: 'Get Started' }).click()

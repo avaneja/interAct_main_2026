@@ -44,6 +44,12 @@ class FakeProviders:
 
 
 @pytest.fixture
+def client(anonymous_client):
+    """These tests start signed out."""
+    return anonymous_client
+
+
+@pytest.fixture
 def providers():
     fake = FakeProviders(github=ADA, google=SignInFailed("access_denied"))
     app.dependency_overrides[get_sign_in_providers] = lambda: fake
@@ -66,7 +72,7 @@ def session_data(client):
 
 
 def test_only_configured_providers_are_offered(client, providers):
-    assert client.get("/api/v1/auth/providers").json() == {"providers": ["github", "google"]}
+    assert client.get("/api/v1/auth/providers").json() == {"providers": ["github", "google"], "dev_login": True}
 
 
 @pytest.mark.parametrize("provider", ["facebook", "dev"])

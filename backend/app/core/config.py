@@ -60,6 +60,13 @@ class Settings(BaseSettings):
             raise ValueError("SESSION_SECRET must be a random value of at least 32 characters in production")
         return self
 
+    # Development-only sign-in as a local test user, for working without OAuth
+    # apps. Production always refuses it, whatever this says.
+    dev_login: bool = True
+
+    def dev_login_allowed(self) -> bool:
+        return self.dev_login and self.app_env == "development"
+
     def oauth_providers(self) -> list[str]:
         """The sign-in providers whose OAuth app is configured."""
         configured = []
