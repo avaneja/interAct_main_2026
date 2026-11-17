@@ -1,6 +1,6 @@
 import { Link, Navigate, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
-import type { QuestionReport, ReportSummary } from '../api/types'
+import type { DeliverySummary, QuestionReport, ReportSummary } from '../api/types'
 import { Alert, Badge, Button, Card, PageTitle } from '../components/ui'
 import { difficultyLabel, styleLabel } from '../lib/labels'
 import { useLoad } from '../lib/useLoad'
@@ -123,6 +123,8 @@ function Report({ summary }: { summary: ReportSummary }) {
         </Card>
       </div>
 
+      {summary.delivery && <DeliverySection delivery={summary.delivery} />}
+
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-white">Question by question</h2>
         {summary.questions.map((question) => (
@@ -224,5 +226,55 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
         )}
       </div>
     </details>
+  )
+}
+
+const percent = (ratio: number | null) => (ratio === null ? '–' : `${Math.round(ratio * 100)}%`)
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-400">{label}</dt>
+      <dd className="mt-0.5 text-lg font-semibold text-white">{value}</dd>
+      {hint && <dd className="text-xs text-slate-500">{hint}</dd>}
+    </div>
+  )
+}
+
+/** How the answers were given: pace, fillers and, with consent, focus. Shown apart from the score. */
+function DeliverySection({ delivery }: { delivery: DeliverySummary }) {
+  const minutes = Math.floor(delivery.speaking_seconds / 60)
+  const seconds = delivery.speaking_seconds % 60
+  return (
+    <Card>
+      <h2 className="font-semibold text-white">Delivery and focus</h2>
+      <p className="mt-1 text-sm text-slate-400">{delivery.note}</p>
+      <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat label="Answering time" value={`${minutes}:${String(seconds).padStart(2, '0')}`} hint={`${delivery.answers_measured} answers`} />
+        <Stat
+          label="Speaking pace"
+          value={delivery.words_per_minute === null ? '–' : `${delivery.words_per_minute} wpm`}
+          hint={delivery.words_per_minute === null ? 'Only for spoken answers' : 'About 120–160 is easy to follow'}
+        />
+        <Stat
+          label="Filler words"
+          value={String(delivery.filler_words)}
+          hint={delivery.fillers_per_100_words === null ? undefined : `${delivery.fillers_per_100_words} per 100 words`}
+        />
+        <Stat
+          label="Left the interview"
+          value={`${delivery.tab_switches}×`}
+          hint={`${delivery.seconds_away}s away${delivery.fullscreen_exits ? `, ${delivery.fullscreen_exits} full-screen exits` : ''}`}
+        />
+        {delivery.camera && (
+          <>
+            <Stat label="Looking away" value={percent(delivery.camera.looking_away_ratio)} hint="Of answering time, estimated" />
+            <Stat label="Long look-aways" value={String(delivery.camera.look_aways)} hint="1.5 seconds or more" />
+            <Stat label="Face not visible" value={percent(delivery.camera.face_missing_ratio)} />
+            <Stat label="More than one face" value={percent(delivery.camera.multiple_faces_ratio)} />
+          </>
+        )}
+      </dl>
+    </Card>
   )
 }

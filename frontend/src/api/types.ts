@@ -162,6 +162,27 @@ export interface ReportSummary {
   areas_to_revise: string[]
   notices: string[]
   questions: QuestionReport[]
+  /** How the answers were given; null when nothing was measured. Never part of the score. */
+  delivery: DeliverySummary | null
+}
+
+export interface DeliverySummary {
+  answers_measured: number
+  speaking_seconds: number
+  words_per_minute: number | null
+  filler_words: number
+  fillers_per_100_words: number | null
+  tab_switches: number
+  seconds_away: number
+  fullscreen_exits: number
+  camera: {
+    answers: number
+    looking_away_ratio: number | null
+    look_aways: number
+    face_missing_ratio: number | null
+    multiple_faces_ratio: number | null
+  } | null
+  note: string
 }
 
 export interface ReportView {

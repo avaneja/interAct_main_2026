@@ -52,6 +52,28 @@ describe('report page', () => {
     expect(screen.getByText(/scored together with your answer/)).toBeVisible()
   })
 
+  it('shows delivery and focus apart from the score, with a note that they are estimates', async () => {
+    mockedApi.report.mockResolvedValue(makeReport())
+    renderApp('/sessions/s-1/report')
+
+    expect(await screen.findByRole('heading', { name: 'Delivery and focus' })).toBeInTheDocument()
+    expect(screen.getByText(/never part of your score/)).toBeInTheDocument()
+    expect(screen.getByText('142 wpm')).toBeInTheDocument()
+    expect(screen.getByText('1:35')).toBeInTheDocument()
+    expect(screen.getByText('18%')).toBeInTheDocument()
+    expect(screen.getByText('1.4 per 100 words')).toBeInTheDocument()
+  })
+
+  it('leaves out delivery when nothing was measured', async () => {
+    const report = makeReport()
+    report.summary.delivery = null
+    mockedApi.report.mockResolvedValue(report)
+    renderApp('/sessions/s-1/report')
+
+    await screen.findByText('Question by question')
+    expect(screen.queryByRole('heading', { name: 'Delivery and focus' })).not.toBeInTheDocument()
+  })
+
   it('explains a low-confidence grade', async () => {
     mockedApi.report.mockResolvedValue(makeReport())
     const user = userEvent.setup()

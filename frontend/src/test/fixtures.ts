@@ -61,6 +61,18 @@ export function makeReport(): ReportView {
       missing_concepts: ['paging'],
       areas_to_revise: ['memory', 'scheduling'],
       notices: ['The interview was ended early, so some planned questions were not asked.'],
+      delivery: {
+        answers_measured: 2,
+        speaking_seconds: 95,
+        words_per_minute: 142,
+        filler_words: 3,
+        fillers_per_100_words: 1.4,
+        tab_switches: 1,
+        seconds_away: 6,
+        fullscreen_exits: 0,
+        camera: { answers: 2, looking_away_ratio: 0.18, look_aways: 2, face_missing_ratio: 0.05, multiple_faces_ratio: 0 },
+        note: 'These are estimates for practice. They are never part of your score.',
+      },
       questions: [
         {
           sequence: 1,
