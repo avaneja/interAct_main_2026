@@ -136,7 +136,9 @@ def current_question(session_id: uuid.UUID, db: DbSession, user: CurrentUser) ->
 def submit_answer(
     session_id: uuid.UUID, body: AnswerSubmit, db: DbSession, user: CurrentUser, llm: LLM, background: BackgroundTasks
 ) -> AnswerResult:
-    result = _answer_result(svc.submit_answer(db, user, session_id, body.question_id, body.text, llm))
+    result = _answer_result(
+        svc.submit_answer(db, user, session_id, body.question_id, body.text, llm, delivery=body.delivery)
+    )
     _prepare_next(db, session_id, llm, background)
     return result
 

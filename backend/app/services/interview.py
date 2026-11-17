@@ -69,6 +69,7 @@ from app.models.enums import AuthProvider, InputModel, SessionState, StyleStatus
 from app.schemas import (
     AnswerEvaluation,
     CriterionScore,
+    DeliverySignals,
     GeneratedQuestion,
     InterviewConfig,
     InterviewContext,
@@ -78,6 +79,7 @@ from app.schemas import (
     SuggestedSubtopics,
 )
 from app.services import prompts
+from app.services.delivery import delivery_record
 from app.services.evidence import (
     REMOVED_MARKER,
     EvidenceCheck,
@@ -541,9 +543,15 @@ def current_question(db: Session, user: User, session_id: uuid.UUID) -> Question
 
 
 def submit_answer(
-    db: Session, user: User, session_id: uuid.UUID, question_id: uuid.UUID, text: str, llm: LLMClient
+    db: Session,
+    user: User,
+    session_id: uuid.UUID,
+    question_id: uuid.UUID,
+    text: str,
+    llm: LLMClient,
+    delivery: DeliverySignals | None = None,
 ) -> SubmitResult:
-    answer = _save_answer(db, user, session_id, question_id, text)
+    answer = _save_answer(db, user, session_id, question_id, text, delivery)
     if answer is None:
         # Already fully processed: return where the interview is now, with the same reaction.
         session = get_session(db, user, session_id)
@@ -558,7 +566,12 @@ def submit_answer(
 
 
 def _save_answer(
-    db: Session, user: User, session_id: uuid.UUID, question_id: uuid.UUID, text: str
+    db: Session,
+    user: User,
+    session_id: uuid.UUID,
+    question_id: uuid.UUID,
+    text: str,
+    delivery: DeliverySignals | None = None,
 ) -> Answer | None:
     """Store the answer and move to EVALUATING.
 
@@ -585,7 +598,12 @@ def _save_answer(
     if active is None or active.id != question.id:
         raise Conflict("Answer the current question first.")
 
-    answer = Answer(question_id=question.id, session_id=session.id, text=text)
+    answer = Answer(
+        question_id=question.id,
+        session_id=session.id,
+        text=text,
+        delivery_json=delivery_record(text, delivery) if delivery else None,
+    )
     db.add(answer)
     _move(session, Event.SUBMIT_ANSWER)
     try:
@@ -593,7 +611,7 @@ def _save_answer(
     except IntegrityError:
         # A double-click raced us and saved the same question's answer first.
         db.rollback()
-        return _save_answer(db, user, session_id, question_id, text)
+        return _save_answer(db, user, session_id, question_id, text, delivery)
     return answer
 
 

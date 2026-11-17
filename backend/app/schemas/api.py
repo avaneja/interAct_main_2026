@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from app.models.enums import InputModel, QuestionType, SessionState
-from app.schemas.interview import QuestionView
+from app.schemas.interview import DeliverySignals, QuestionView
 
 AnswerText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10_000)]
 
@@ -43,6 +43,8 @@ class AnswerSubmit(BaseModel):
 
     question_id: uuid.UUID
     text: AnswerText
+    # How the answer was given, measured in the browser. Never part of the score.
+    delivery: DeliverySignals | None = None
 
 
 class AnswerResult(BaseModel):

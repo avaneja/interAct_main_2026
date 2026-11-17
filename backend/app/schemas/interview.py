@@ -23,6 +23,31 @@ class ClientInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class CameraFocus(ClientInput):
+    """Estimated in the browser from the camera while the candidate answered. Numbers only."""
+
+    looking_away_ratio: float = Field(ge=0, le=1)
+    look_aways: int = Field(ge=0, le=1000)
+    face_missing_ratio: float = Field(ge=0, le=1)
+    multiple_faces_ratio: float = Field(ge=0, le=1)
+
+
+class DeliverySignals(ClientInput):
+    """Measured in the browser while the candidate answered one question.
+
+    Numbers only: no video, audio, image or screen content is ever sent. The
+    focus fields are sent only when the candidate consented to focus
+    tracking, and the camera ones only when the camera was on.
+    """
+
+    answer_seconds: float = Field(ge=0, le=3600)
+    spoken: bool
+    tab_switches: int = Field(default=0, ge=0, le=1000)
+    seconds_away: float = Field(default=0, ge=0, le=3600)
+    fullscreen_exits: int = Field(default=0, ge=0, le=1000)
+    camera: CameraFocus | None = None
+
+
 class LLMOutput(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 

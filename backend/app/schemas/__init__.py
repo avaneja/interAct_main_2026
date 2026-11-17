@@ -1,7 +1,9 @@
 from app.schemas.interview import (
     AnswerEvaluation,
     AnswerKey,
+    CameraFocus,
     CriterionScore,
+    DeliverySignals,
     GeneratedQuestion,
     InterviewConfig,
     InterviewContext,
@@ -15,7 +17,9 @@ from app.schemas.interview import (
 __all__ = [
     "AnswerEvaluation",
     "AnswerKey",
+    "CameraFocus",
     "CriterionScore",
+    "DeliverySignals",
     "GeneratedQuestion",
     "InterviewConfig",
     "InterviewContext",

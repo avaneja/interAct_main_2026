@@ -145,6 +145,9 @@ class Answer(IdMixin, Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     # What the interviewer said in reply to this answer, so a repeated submit gets the same reply.
     reaction: Mapped[str | None] = mapped_column(Text)
+    # Delivery and focus numbers for this answer (see services/delivery.py). Never media,
+    # never part of the score.
+    delivery_json: Mapped[dict[str, Any] | None] = mapped_column(JSONType)
 
     question: Mapped[Question] = relationship(back_populates="answer")
     evaluation: Mapped["Evaluation | None"] = relationship(

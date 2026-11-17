@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Answer, Evaluation, InterviewSession, Question
 from app.models.enums import StyleStatus
+from app.services.delivery import summarise
 
 LABEL = "Rubric-based practice estimate"
 REVISE_BELOW_PERCENT = 60
@@ -156,4 +157,8 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
         "areas_to_revise": weak + [name for name in not_covered if name not in weak],
         "notices": notices,
         "questions": entries,
+        # How answers were given (pace, fillers, focus); never part of the score above.
+        "delivery": summarise(
+            [a.delivery_json for a in db.scalars(select(Answer).where(Answer.session_id == session.id)) if a.delivery_json]
+        ),
     }
