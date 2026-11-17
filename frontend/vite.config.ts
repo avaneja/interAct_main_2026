@@ -9,20 +9,37 @@ import tailwindcss from '@tailwindcss/vite'
 // setup is needed. BACKEND_URL overrides where the backend runs.
 const backendUrl = process.env.BACKEND_URL ?? 'http://127.0.0.1:8000'
 
-// HeadTTS (the interviewer's voice) runs in a Web Worker that loads its
-// language module and pronunciation dictionary by relative path at runtime,
-// which a bundler cannot follow. So its files are served unchanged under
-// /vendor/headtts/ and the app loads it from there (see src/call/voice.ts).
-const VENDOR_URL = '/vendor/headtts/'
-const VENDOR_DIR = path.resolve(import.meta.dirname, 'node_modules/@met4citizen/headtts')
-const VENDOR_FILES = [
-  'modules/headtts.mjs',
-  'modules/worker-tts.mjs',
-  'modules/utils.mjs',
-  'modules/language.mjs',
-  'modules/language-en-us.mjs',
-  'dictionaries/en-us.txt',
+// Some libraries load files by path at runtime, which a bundler cannot follow,
+// so those files are served unchanged under /vendor/ and copied into the build:
+// - HeadTTS (the interviewer's voice) runs in a Web Worker that loads its
+//   language module and dictionary by relative path (see src/call/voice.ts).
+// - MediaPipe (focus tracking) loads its WebAssembly runtime from a folder
+//   (see src/call/gaze.ts).
+const VENDORS = [
+  {
+    url: '/vendor/headtts/',
+    dir: 'node_modules/@met4citizen/headtts',
+    files: [
+      'modules/headtts.mjs',
+      'modules/worker-tts.mjs',
+      'modules/utils.mjs',
+      'modules/language.mjs',
+      'modules/language-en-us.mjs',
+      'dictionaries/en-us.txt',
+    ],
+  },
+  {
+    url: '/vendor/mediapipe/',
+    dir: 'node_modules/@mediapipe/tasks-vision',
+    files: ['wasm/vision_wasm_internal.js', 'wasm/vision_wasm_internal.wasm'],
+  },
 ]
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.mjs': 'text/javascript',
+  '.js': 'text/javascript',
+  '.wasm': 'application/wasm',
+}
 
 function vendorFiles(): Plugin {
   let outDir = 'dist'
@@ -34,17 +51,20 @@ function vendorFiles(): Plugin {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const url = request.url?.split('?')[0] ?? ''
-        const name = url.startsWith(VENDOR_URL) ? decodeURIComponent(url.slice(VENDOR_URL.length)) : ''
-        if (!VENDOR_FILES.includes(name)) return next()
-        const file = path.join(VENDOR_DIR, name)
+        const vendor = VENDORS.find((candidate) => url.startsWith(candidate.url))
+        const name = vendor ? decodeURIComponent(url.slice(vendor.url.length)) : ''
+        if (!vendor || !vendor.files.includes(name)) return next()
+        const file = path.resolve(import.meta.dirname, vendor.dir, name)
         if (!existsSync(file) || !statSync(file).isFile()) return next()
-        response.setHeader('Content-Type', name.endsWith('.mjs') ? 'text/javascript' : 'text/plain; charset=utf-8')
+        response.setHeader('Content-Type', CONTENT_TYPES[path.extname(name)] ?? 'text/plain; charset=utf-8')
         createReadStream(file).pipe(response)
       })
     },
     writeBundle() {
-      for (const name of VENDOR_FILES) {
-        cpSync(path.join(VENDOR_DIR, name), path.join(outDir, VENDOR_URL, name))
+      for (const vendor of VENDORS) {
+        for (const name of vendor.files) {
+          cpSync(path.resolve(import.meta.dirname, vendor.dir, name), path.join(outDir, vendor.url, name))
+        }
       }
     },
   }

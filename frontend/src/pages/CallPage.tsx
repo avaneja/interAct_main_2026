@@ -6,6 +6,7 @@ import { useAuth } from '../auth/context'
 import AnswerPanel from '../call/AnswerPanel'
 import CallStage, { CallTimer, type Caption } from '../call/CallStage'
 import { startFocusTracker, type FocusTracker } from '../call/focusTracker'
+import { startGaze, type Gaze } from '../call/gaze'
 import Interviewer, { type InterviewerHandle, type InterviewerStatus } from '../call/Interviewer'
 import { DEFAULT_INTERVIEWER } from '../call/interviewers'
 import PreCallPanel, { type AnswerMode } from '../call/PreCallPanel'
@@ -148,6 +149,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const alive = useRef(true)
   // Focus tracking runs only with the candidate's consent, given in the lobby.
   const focus = useRef<FocusTracker | null>(null)
+  const gaze = useRef<Gaze | null>(null)
+  const [trackingFocus, setTrackingFocus] = useState(false)
   const answerStartedAt = useRef(0)
   const speakQueue = useRef(Promise.resolve())
 
@@ -213,6 +216,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     // An answer is measured from when the question has been asked.
     answerStartedAt.current = Date.now()
     focus.current?.reset()
+    gaze.current?.reset()
     setListening(true)
   }
 
@@ -221,7 +225,31 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     answer_seconds: Math.min(3600, Math.max(0, (Date.now() - answerStartedAt.current) / 1000)),
     spoken,
     ...(focus.current?.read() ?? {}),
+    ...(gaze.current?.read() ? { camera: gaze.current.read() ?? undefined } : {}),
   })
+
+  // With consent and the camera on, estimate eye contact during the call. If the face model
+  // cannot load, the call simply goes on without it.
+  const cameraStream = camera.status === 'on' ? camera.stream : null
+  const inCall = stage !== 'lobby'
+  useEffect(() => {
+    if (!trackingFocus || !cameraStream || !inCall) return
+    let current = true
+    let started: Gaze | null = null
+    startGaze(cameraStream).then(
+      (ready) => {
+        if (!current) return ready.stop()
+        started = ready
+        gaze.current = ready
+      },
+      () => undefined,
+    )
+    return () => {
+      current = false
+      started?.stop()
+      gaze.current = null
+    }
+  }, [trackingFocus, cameraStream, inCall])
 
   const ask = (next: QuestionView, before: string[]) => {
     setQuestion(next)
@@ -372,6 +400,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const join = async (chosen: AnswerMode, trackFocus: boolean) => {
     setMode(chosen)
     if (trackFocus && !focus.current) focus.current = startFocusTracker()
+    setTrackingFocus(trackFocus)
     setJoining(true)
     void fullScreen.enter()
     try {
