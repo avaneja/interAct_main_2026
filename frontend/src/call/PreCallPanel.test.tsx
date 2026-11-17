@@ -35,7 +35,7 @@ describe('the pre-call check', () => {
     expect(await screen.findByRole('meter', { name: 'Microphone level' })).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Join interview' }))
 
-    expect(props.onJoin).toHaveBeenCalledWith('speak')
+    expect(props.onJoin).toHaveBeenCalledWith('speak', false)
   })
 
   it('explains a blocked microphone and only allows joining by typing', async () => {
@@ -52,7 +52,7 @@ describe('the pre-call check', () => {
     await user.click(screen.getByRole('radio', { name: 'Type my answers' }))
     await user.click(screen.getByRole('button', { name: 'Join interview' }))
 
-    expect(props.onJoin).toHaveBeenCalledWith('type')
+    expect(props.onJoin).toHaveBeenCalledWith('type', false)
   })
 
   it('releases the microphone when typing is chosen', async () => {
@@ -119,6 +119,19 @@ describe('the pre-call check', () => {
 
     expect(props.onCameraOn).toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Join interview' })).toBeEnabled()
+  })
+
+  it('tracks focus only when the candidate ticks the consent box', async () => {
+    const props = renderPanel({ canSpeak: false })
+    const box = screen.getByRole('checkbox', { name: /Track my focus for practice feedback/ })
+    expect(box).not.toBeChecked()
+    expect(screen.getByText(/Nothing is recorded, and it never affects your score/)).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(box)
+    await user.click(screen.getByRole('button', { name: 'Join interview' }))
+
+    expect(props.onJoin).toHaveBeenCalledWith('type', true)
   })
 
   it('says where camera, voice and answers go', () => {

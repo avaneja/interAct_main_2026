@@ -31,7 +31,8 @@ export interface AnswerPanelProps {
   microphoneOn: boolean
   sending: boolean
   error?: string | null
-  onSubmit: (text: string) => void
+  /** `spoken` is false when the answer was typed, including after "Type instead". */
+  onSubmit: (text: string, how: { spoken: boolean }) => void
   /** The candidate's words as they speak, for the caption. */
   onCaption: (text: string) => void
   silenceMs?: number
@@ -176,7 +177,7 @@ export default function AnswerPanel({
           className="flex flex-1 flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault()
-            if (draft.trim() && canListen && !sending) onSubmit(draft.trim())
+            if (draft.trim() && canListen && !sending) onSubmit(draft.trim(), { spoken: !typing })
           }}
         >
           {problem && (

@@ -89,7 +89,7 @@ describe('answering by voice', () => {
     await user.type(box, 'A process is a program in execution')
     await user.click(screen.getByRole('button', { name: 'Send answer' }))
 
-    expect(props.onSubmit).toHaveBeenCalledWith('A process is a program in execution')
+    expect(props.onSubmit).toHaveBeenCalledWith('A process is a program in execution', { spoken: true })
   })
 
   it('moves to review after a pause, and new words restart the wait', () => {
@@ -187,7 +187,7 @@ describe('answering by typing', () => {
     rerender({ mode: 'type', canListen: true })
     await user.click(screen.getByRole('button', { name: 'Send answer' }))
 
-    expect(props.onSubmit).toHaveBeenCalledWith('A process is a running program')
+    expect(props.onSubmit).toHaveBeenCalledWith('A process is a running program', { spoken: false })
     expect(transcriber.start).not.toHaveBeenCalled()
     expect(screen.queryByRole('button', { name: 'Keep talking' })).not.toBeInTheDocument()
   })

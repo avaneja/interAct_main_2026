@@ -173,7 +173,8 @@ export interface PreCallPanelProps {
   onCameraOff: () => void
   canSpeak: boolean
   joining?: boolean
-  onJoin: (mode: AnswerMode) => void
+  /** `trackFocus` is the candidate's consent to focus tracking; it starts unchecked. */
+  onJoin: (mode: AnswerMode, trackFocus: boolean) => void
 }
 
 /** The lobby before the call: check camera, microphone and voice, choose how to answer, then join. */
@@ -192,6 +193,7 @@ export default function PreCallPanel({
 }: PreCallPanelProps) {
   const [mode, setMode] = useState<AnswerMode>(canSpeak ? 'speak' : 'type')
   const [micReady, setMicReady] = useState(false)
+  const [trackFocus, setTrackFocus] = useState(false)
   const voiceLoading = voice.status === 'loading' && !usingBrowserVoice
   const blockedByMic = mode === 'speak' && !micReady
 
@@ -245,8 +247,20 @@ export default function PreCallPanel({
         </ul>
       </div>
 
+      <label className="flex gap-2 rounded-lg border border-slate-800 p-3 text-sm text-slate-200">
+        <input type="checkbox" checked={trackFocus} onChange={(event) => setTrackFocus(event.target.checked)} />
+        <span>
+          Track my focus for practice feedback
+          <span className="mt-1 block text-xs text-slate-400">
+            Counts tab switches and time away and, with the camera on, estimates eye contact in this browser. Only the
+            numbers are kept, for the Delivery and focus part of your report. Nothing is recorded, and it never
+            affects your score.
+          </span>
+        </span>
+      </label>
+
       <div className="space-y-2">
-        <Button className="w-full" busy={joining} disabled={voiceLoading || blockedByMic} onClick={() => onJoin(mode)}>
+        <Button className="w-full" busy={joining} disabled={voiceLoading || blockedByMic} onClick={() => onJoin(mode, trackFocus)}>
           {voiceLoading ? (
             <>
               <Spinner /> Waiting for {interviewerName}'s voice…

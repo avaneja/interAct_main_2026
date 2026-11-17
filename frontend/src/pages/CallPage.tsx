@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router'
 import { ApiError, api } from '../api/client'
-import type { AnswerResult, ChatReply, QuestionView, SessionView } from '../api/types'
+import type { AnswerResult, ChatReply, DeliverySignals, QuestionView, SessionView } from '../api/types'
 import { useAuth } from '../auth/context'
 import AnswerPanel from '../call/AnswerPanel'
 import CallStage, { CallTimer, type Caption } from '../call/CallStage'
+import { startFocusTracker, type FocusTracker } from '../call/focusTracker'
 import Interviewer, { type InterviewerHandle, type InterviewerStatus } from '../call/Interviewer'
 import { DEFAULT_INTERVIEWER } from '../call/interviewers'
 import PreCallPanel, { type AnswerMode } from '../call/PreCallPanel'
@@ -145,6 +146,9 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const stageRef = useRef<HTMLDivElement>(null)
   const fullScreen = useFullScreen(stageRef)
   const alive = useRef(true)
+  // Focus tracking runs only with the candidate's consent, given in the lobby.
+  const focus = useRef<FocusTracker | null>(null)
+  const answerStartedAt = useRef(0)
   const speakQueue = useRef(Promise.resolve())
 
   // The speaker is chosen when it is needed: the neural voice with lip-sync when both it and the
@@ -168,6 +172,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     void cameraOn()
     return () => {
       alive.current = false
+      focus.current?.stop()
+      focus.current = null
       speakerRef.current?.stop()
     }
   }, [cameraOn])
@@ -204,8 +210,18 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     for (const line of lines) await say(line)
     if (!alive.current) return
     linesAfterAnswer(turns + 1).forEach((line) => speaker.prepare(line))
+    // An answer is measured from when the question has been asked.
+    answerStartedAt.current = Date.now()
+    focus.current?.reset()
     setListening(true)
   }
+
+  /** How this answer was given: timing always, focus counts only with consent. Numbers only. */
+  const deliveryOf = (spoken: boolean): DeliverySignals => ({
+    answer_seconds: Math.min(3600, Math.max(0, (Date.now() - answerStartedAt.current) / 1000)),
+    spoken,
+    ...(focus.current?.read() ?? {}),
+  })
 
   const ask = (next: QuestionView, before: string[]) => {
     setQuestion(next)
@@ -266,14 +282,15 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     await ask(next, [next.lead_in ?? questionIntroLine(next.sequence, total)])
   }
 
-  const submit = async (text: string) => {
+  const submit = async (text: string, how: { spoken: boolean }) => {
     if (!question) return
     const current = question
     setAnswerError(null)
     setCallError(null)
     let result: AnswerResult
     try {
-      result = await whileThinking(() => api.submitAnswer(sessionId, current.id, text))
+      const delivery = deliveryOf(how.spoken)
+      result = await whileThinking(() => api.submitAnswer(sessionId, current.id, text, delivery))
     } catch (caught) {
       if (!alive.current) return
       // The model failed after the answer was saved: nothing was lost, and it can be retried.
@@ -352,8 +369,9 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     for (const line of lines) readyVoice.say(line).catch(() => undefined)
   }, [readyVoice, firstPrompt, firstSequence, preset.name, firstName, total, topic, resuming])
 
-  const join = async (chosen: AnswerMode) => {
+  const join = async (chosen: AnswerMode, trackFocus: boolean) => {
     setMode(chosen)
+    if (trackFocus && !focus.current) focus.current = startFocusTracker()
     setJoining(true)
     void fullScreen.enter()
     try {
@@ -454,7 +472,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
             onCameraOff={cameraOff}
             canSpeak={canRecognizeSpeech()}
             joining={joining}
-            onJoin={(chosen) => void join(chosen)}
+            onJoin={(chosen, trackFocus) => void join(chosen, trackFocus)}
           />
         </div>
       )
@@ -586,7 +604,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
           label={questionLabel(question)}
           prompt={question.prompt}
           error={answerError}
-          onSubmit={(text) => void submit(text)}
+          onSubmit={(text, how) => void submit(text, how)}
         />
         {thinking}
         {callError && <Alert>{callError}</Alert>}

@@ -104,6 +104,22 @@ describe('the interview call', () => {
     expect(screen.getByText('Question 1 of 5')).toBeInTheDocument()
   })
 
+  it('sends focus counts with an answer only when the candidate consented', async () => {
+    atQuestion(second)
+    mockedApi.submitAnswer.mockResolvedValue({ state: 'IN_PROGRESS', next_question: last, completed: false, reaction: null })
+    const user = userEvent.setup()
+    renderApp('/sessions/s-1/interview')
+    await user.click(await screen.findByRole('checkbox', { name: /Track my focus/ }))
+    await user.click(screen.getByRole('button', { name: 'Join interview' }))
+
+    await send(user, 'Paging maps virtual pages to frames.')
+
+    await vi.waitFor(() => expect(mockedApi.submitAnswer).toHaveBeenCalled())
+    expect(mockedApi.submitAnswer.mock.calls[0][3]).toEqual({
+      answer_seconds: expect.any(Number), spoken: false, tab_switches: 0, seconds_away: 0, fullscreen_exits: 0,
+    })
+  })
+
   it('reacts to an answer, leads into the next question and asks it', async () => {
     atQuestion()
     mockedApi.submitAnswer.mockResolvedValue({
@@ -115,7 +131,10 @@ describe('the interview call', () => {
     await send(user, 'A process is a running program.')
 
     expect(await screen.findByText('Why does paging help?')).toBeInTheDocument()
-    expect(mockedApi.submitAnswer).toHaveBeenCalledWith('s-1', 'q-1', 'A process is a running program.')
+    expect(mockedApi.submitAnswer).toHaveBeenCalledWith('s-1', 'q-1', 'A process is a running program.', {
+      answer_seconds: expect.any(Number),
+      spoken: false,
+    })
     await vi.waitFor(() =>
       expect(spoken.slice(-3)).toEqual([fillerLine(2), 'Good point about memory. Now, paging.', second.prompt]))
     expect(screen.getByText('Question 2 of 5')).toBeInTheDocument()

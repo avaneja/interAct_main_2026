@@ -2,6 +2,7 @@ import type {
   AnswerResult,
   ChatReply,
   ChatStage,
+  DeliverySignals,
   InputModel,
   InterviewConfig,
   InterviewContext,
@@ -117,8 +118,8 @@ export const api = {
   start: (id: string) => request<QuestionView>('POST', session(id, 'start')),
   currentQuestion: (id: string, signal?: AbortSignal) =>
     request<QuestionView>('GET', session(id, 'current-question'), undefined, signal),
-  submitAnswer: (id: string, questionId: string, text: string) =>
-    request<AnswerResult>('POST', session(id, 'answers'), { question_id: questionId, text }),
+  submitAnswer: (id: string, questionId: string, text: string, delivery?: DeliverySignals) =>
+    request<AnswerResult>('POST', session(id, 'answers'), { question_id: questionId, text, delivery }),
   retry: (id: string) => request<AnswerResult>('POST', session(id, 'retry')),
   chat: (id: string, stage: ChatStage, text: string) => request<ChatReply>('POST', session(id, 'chat'), { stage, text }),
   pause: (id: string) => request<SessionView>('POST', session(id, 'pause')),

@@ -85,6 +85,21 @@ export interface AnswerResult {
   reaction: string | null
 }
 
+/** How an answer was given, measured in the browser. Numbers only; never part of the score. */
+export interface DeliverySignals {
+  answer_seconds: number
+  spoken: boolean
+  tab_switches?: number
+  seconds_away?: number
+  fullscreen_exits?: number
+  camera?: {
+    looking_away_ratio: number
+    look_aways: number
+    face_missing_ratio: number
+    multiple_faces_ratio: number
+  }
+}
+
 export type ChatStage = 'warm_up' | 'closing'
 
 export interface ChatReply {
