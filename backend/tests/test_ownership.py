@@ -172,3 +172,18 @@ def test_development_sign_in_is_refused_outside_development(anonymous_client, se
     assert anonymous_client.post("/api/v1/auth/dev/login").status_code == 404
     assert anonymous_client.get("/api/v1/auth/providers").json()["dev_login"] is False
     assert anonymous_client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_another_user_cannot_see_your_document(ada, bob, tmp_path):
+    from app.core.storage import FileStorage, get_storage
+
+    app.dependency_overrides[get_storage] = lambda: FileStorage(tmp_path)
+    upload = ada.post("/api/v1/documents", files={"file": ("notes.txt", b"Ada's notes", "text/plain")})
+    document_id = upload.json()["id"]
+
+    theirs = bob.get(f"/api/v1/documents/{document_id}")
+    missing = bob.get("/api/v1/documents/00000000-0000-4000-8000-000000000000")
+
+    assert ada.get(f"/api/v1/documents/{document_id}").status_code == 200
+    assert theirs.status_code == 404
+    assert theirs.json() == missing.json()

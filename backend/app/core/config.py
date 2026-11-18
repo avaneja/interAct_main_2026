@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     style_check: Literal["rules", "rules_and_llm"] = "rules_and_llm"
+    # Uploaded documents (Model B). Kept outside anything served to the browser.
+    upload_dir: Path = BACKEND_DIR / "uploads"
+    max_upload_mb: int = Field(default=20, ge=1, le=100)
+
+    @field_validator("upload_dir", mode="before")
+    @classmethod
+    def default_upload_dir(cls, value: object) -> object:
+        return BACKEND_DIR / "uploads" if value in ("", None) else value
     # Where people open the app. OAuth providers send users back to
     # {public_url}/api/v1/auth/{provider}/callback, so it must match the
     # callback registered with each provider.

@@ -20,6 +20,8 @@ dependencies = [
     # Authlib's web client uses httpx; the app and tests use httpx2.
     "httpx~=0.28.1",
     "alembic~=1.20",
+    # File uploads (FastAPI's UploadFile).
+    "python-multipart~=0.0.34",
 ]
 
 [project.optional-dependencies]
