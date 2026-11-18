@@ -204,6 +204,13 @@ class CriterionScore(LLMOutput):
         return self
 
 
+class SourcedPoint(LLMOutput):
+    """A point the candidate made, with their own words as the quote."""
+
+    point: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    quote: LongText
+
+
 class AnswerEvaluation(LLMOutput):
     """A rubric score for one answer, as the evaluator must return it.
 
@@ -218,6 +225,9 @@ class AnswerEvaluation(LLMOutput):
     missing_concepts: list[ShortText] = Field(default_factory=list, max_length=20)
     insufficient_evidence: bool = False
     better_answer_outline: list[LongText] = Field(default_factory=list, max_length=6)
+    # Document questions only: what the candidate said that their document supports, and what goes beyond it.
+    document_supported: list[SourcedPoint] = Field(default_factory=list, max_length=10)
+    outside_knowledge: list[SourcedPoint] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def check_totals(self) -> Self:

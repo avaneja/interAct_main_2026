@@ -125,6 +125,13 @@ class FakeLLM:
         if request.purpose == "classify_style":
             # The fake always agrees, so tests queue a reply to simulate a mismatch.
             return {"style": hints["question_type"], "reason": "Fake style check."}
+        if request.purpose == "evaluate_document_answer":
+            # The usual fake grade; the answer's first sentence counts as a point the document supports.
+            reply = self._default_reply(LLMRequest("evaluate_answer", "", "", request.hints))
+            first = re.split(r"(?<=[.!?])\s+", hints["answer"].strip())[0]
+            reply["document_supported"] = [{"point": "A point from the document.", "quote": first}] if first else []
+            reply["outside_knowledge"] = []
+            return reply
         if request.purpose == "evaluate_answer":
             # More words earn more credit, so tests can steer scores by answer length.
             words = len(re.findall(r"\w+", hints["answer"]))

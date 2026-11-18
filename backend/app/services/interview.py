@@ -98,6 +98,7 @@ from app.services.evidence import (
     EvidenceCheck,
     asks_for_answer_or_score,
     non_answer_reason,
+    quote_in_answer,
     remove_grader_instructions,
     shares_no_terms,
     verify_evidence,
@@ -828,7 +829,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
         insufficient_reason = non_answer
         evaluator_version = f"rule|{rubric_label}|non-answer"
     else:
-        request = prompts.evaluation_request(
+        details = dict(
             question_prompt=question.prompt,
             question_type=question.type,
             difficulty=question.difficulty,
@@ -837,6 +838,14 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
             criteria=criteria,
             answer_key=question.answer_key_json,
         )
+        sources = [db.get(DocumentChunk, uuid.UUID(chunk_id)) for chunk_id in question.source_chunk_ids]
+        sources = [chunk for chunk in sources if chunk is not None]
+        if sources:
+            request = prompts.document_evaluation_request(
+                passages=[(_pages(chunk), chunk.text) for chunk in sources], **details
+            )
+        else:
+            request = prompts.evaluation_request(**details)
 
         def matches_rubric(evaluation: AnswerEvaluation) -> None:
             returned = {(c.name, c.max_score) for c in evaluation.criteria}
@@ -846,6 +855,11 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
         evaluation = _ask_llm(db, llm, request, AnswerEvaluation, session_id=answer.session_id, check=matches_rubric)
         # Quotes not found in the answer are dropped, so only the candidate's own words are shown.
         checked = verify_evidence(evaluation, candidate_text)
+        for field in ("document_supported", "outside_knowledge"):
+            points = getattr(checked.evaluation, field)
+            kept = [point for point in points if quote_in_answer(point.quote, candidate_text)]
+            checked.removed.extend(point.quote for point in points if point not in kept)
+            checked.evaluation = checked.evaluation.model_copy(update={field: kept})
         insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer, candidate_text)
         if insufficient_reason and not checked.evaluation.insufficient_evidence:
             checked.evaluation = checked.evaluation.model_copy(update={"insufficient_evidence": True})

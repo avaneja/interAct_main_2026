@@ -107,6 +107,11 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
                 "insufficient_reason": scores.get("insufficient_reason"),
             }
             entry["better_answer_outline"] = scores.get("better_answer_outline", [])
+            if question.grounding_status is not GroundingStatus.NOT_APPLICABLE:
+                entry["document_points"] = {
+                    "supported": scores.get("document_supported", []),
+                    "outside": scores.get("outside_knowledge", []),
+                }
             totals = competencies.setdefault(question.competency, {"score": 0, "max_score": 0, "questions": 0})
             totals["score"] += scores["score"]
             totals["max_score"] += scores["max_score"]

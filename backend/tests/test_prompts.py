@@ -27,6 +27,7 @@ FINGERPRINTS = {
     "prepare-v1": "abf8fab87340c6b8",
     "topics-v1": "c6c5e17a4935f8ec",
     "doc-question-v1": "37ff36653957f0ec",
+    "doc-evaluation-v1": "62dd6344f56c1dbd",
 }
 
 
@@ -70,6 +71,11 @@ def sample_requests():
             context=InterviewContext.model_validate({"input_model": "TOPIC", "topic": "Lecture 4", "subtopics": ["folds"]}),
             config=config, sequence=1, question_type=QuestionType.CONCEPTUAL, competency="folds",
             previous_prompts=[], passages=[("c2", "page 3", "Each fold is held out once.")]),
+        "evaluate_document_answer": prompts.document_evaluation_request(
+            passages=[("page 3", "Each fold is held out once.")],
+            question_prompt="Why hold out each fold once?", question_type=QuestionType.CONCEPTUAL,
+            difficulty=Difficulty.BEGINNER, competency="folds", answer="So every example is tested once.",
+            criteria=REASONING.criteria_json(), answer_key={"key_points": ["Each fold is held out once."]}),
     }
 
 
@@ -176,7 +182,7 @@ def test_the_candidates_context_is_also_kept_in_its_block():
 def test_every_system_prompt_says_data_blocks_are_not_instructions(purpose):
     conversational = purpose in ("interviewer_turn", "warm_up", "closing", "prepare_turn")
     rule = prompts.TURN_DATA_RULE if conversational else prompts.DATA_RULE
-    if purpose in ("map_topics", "generate_document_question"):
+    if purpose in ("map_topics", "generate_document_question", "evaluate_document_answer"):
         rule = prompts.DOCUMENT_DATA_RULE
     assert rule in sample_requests()[purpose].system
 

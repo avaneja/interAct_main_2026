@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.core.llm import FakeLLM
 from app.core.storage import FileStorage
-from app.models import Base, DocumentChunk, DocumentTopic, Question, User
+from app.models import Base, DocumentChunk, DocumentTopic, Rubric, User
 from app.models.enums import AuthProvider, GroundingStatus, InputModel, StyleStatus
 from app.schemas import InterviewConfig, InterviewContext, QuestionView
 from app.services import documents
@@ -290,3 +290,53 @@ def test_topics_sharing_a_chunk_follow_where_the_document_names_them(db, user, t
     session = document_session(db, user, document)
 
     assert svc.get_session(db, user, session.id).context_json["subtopics"] == ["Overfitting", "Thresholds"]
+
+
+# Answer keys and document-supported points
+
+
+
+def test_document_answers_are_graded_against_their_source_and_points_are_sorted(db, user, document, llm):
+    session = document_session(db, user, document, topics=[topic(db, "Cross-validation")])
+    source, chunk = label(db, FOLDS)
+    llm.queue_for("generate_document_question", reply(source, FOLDS.strip()))
+    question = svc.start(db, user, session.id, llm)
+    answer = "Each fold is held out once while the model trains on the others. Sklearn has a KFold class for this."
+    svc.submit_answer(db, user, session.id, question.id, answer, llm)
+    rubric = db.get(Rubric, question.rubric_id)
+    criteria = [{"name": c["name"], "max_score": c["max_score"], "score": 0, "evidence_quote": None, "reason": "x"}
+                for c in rubric.criteria_json]
+    llm.queue_for("evaluate_document_answer", json.dumps({
+        "criteria": criteria, "missing_concepts": [], "better_answer_outline": [], "insufficient_evidence": False,
+        "document_supported": [{"point": "Each fold is held out once", "quote": "Each fold is held out once"}],
+        "outside_knowledge": [{"point": "Sklearn's KFold", "quote": "Sklearn has a KFold class"},
+                              {"point": "Invented", "quote": "Cross-validation was created in 1931"}]}))
+
+    svc.finish(db, user, session.id, llm)
+
+    request = next(r for r in llm.requests if r.purpose == "evaluate_document_answer")
+    assert request.prompt_version == "doc-evaluation-v1"
+    assert FOLDS.strip()[:40] in request.user and "<document>" in request.user
+    entry = svc.get_report(db, user, session.id).summary_json["questions"][0]
+    assert entry["document_points"]["supported"] == [
+        {"point": "Each fold is held out once", "quote": "Each fold is held out once"}]
+    # A quote that is not the candidate's own words is dropped.
+    assert entry["document_points"]["outside"] == [{"point": "Sklearn's KFold", "quote": "Sklearn has a KFold class"}]
+    assert entry["answer_key"] == {"key_points": ["Each fold is held out once."]}
+
+
+def test_topic_answers_keep_the_usual_evaluator(db, user, llm):
+    session = svc.create_session(db, user, InputModel.TOPIC)
+    svc.set_context(db, user, session.id, InterviewContext.model_validate(
+        {"input_model": "TOPIC", "topic": "OS", "subtopics": ["processes"]}))
+    svc.set_config(db, user, session.id, InterviewConfig.model_validate(
+        {"question_type": "DIRECT", "difficulty": "beginner", "question_count": 5}))
+    svc.confirm_plan(db, user, session.id)
+    question = svc.start(db, user, session.id, llm)
+    svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
+
+    svc.finish(db, user, session.id, llm)
+
+    purposes = {r.purpose for r in llm.requests}
+    assert "evaluate_answer" in purposes and "evaluate_document_answer" not in purposes
+    assert "document_points" not in svc.get_report(db, user, session.id).summary_json["questions"][0]
