@@ -110,6 +110,17 @@ Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP 
 6. **Small-document shortcut:** If the selected scope is small enough to fit in the model context (≈15k tokens), scope extraction reads it whole instead of retrieving.
 7. **Prompt-injection handling:** Document text is passed only inside delimited data blocks, never as instructions, and all LLM outputs are validated against strict schemas.
 
+**As built (M9):**
+
+- **Uploads and storage:** PDF and TXT only, checked by extension and content, at most 20 MB. Files are stored under random names in a private folder (`UPLOAD_DIR`). They are deleted 30 days after upload (`DOCUMENT_RETENTION_DAYS`), or on request, unless an unfinished interview uses them.
+- **Reading the text:** PyMuPDF reads PDFs page by page. Scanned, damaged, password-protected or nearly empty files are refused with a reason, and so is anything over 300 pages or 1.5 million characters.
+- **Chunks:** 400–800 tokens each (estimated from words), ending at sentence boundaries, overlapping by about 80 tokens, and recording their first and last page.
+- **Topic map (`topics-v1`):** 3 to 8 topics, each citing only chunks that exist. A topic whose cited IDs were invented is matched to its chunks by BM25, or dropped if nothing matches. Up to 5,000 tokens the model reads the whole text; above that, the first 60 words of every chunk, to fit the local model's 8K context.
+- **Background processing:** reading and mapping run after the upload response, as a job polled at `/api/v1/jobs/{id}`.
+- **Questions (`doc-question-v1`):** each is built from its topic's passages: the whole document if it fits 2,500 tokens, otherwise the topic's chunks, otherwise the best BM25 matches.
+- **Quote checks:** a question's supporting quote must be at least five words and appear in the cited chunk, ignoring case, spacing, quote marks and dashes. A quote found in another passage the question was given corrects the citation. Otherwise the question is regenerated once, then kept and flagged with the reason. The report shows the pass rate.
+- **Grading (`doc-evaluation-v1`):** answers are graded with their source passages and answer key. The candidate's points are sorted into document-supported and outside knowledge, each with the candidate's own words, checked against the answer.
+
 ### 2.3 Shared interview configuration (both models)
 
 | Setting | Choices / behavior |
@@ -386,7 +397,11 @@ Keep **fixed-question mode** available internally for controlled research compar
 | `POST` | `/api/v1/sessions` | Create draft session for `TOPIC` or `DOCUMENT` |
 | `POST` | `/api/v1/sessions/{id}/prepare/message` | Exchange Model A clarification messages: the request, a reply, a skip, or "enough" |
 | `GET` | `/api/v1/sessions/{id}/prepare` | The clarification chat so far and the draft scope |
-| `POST` | `/api/v1/documents` | Upload and validate a document |
+| `POST` | `/api/v1/documents` | Upload and validate a document; returns the processing job's id |
+| `GET` | `/api/v1/documents` | The user's uploads, with when each is deleted |
+| `GET` | `/api/v1/documents/{id}` | One upload and its status |
+| `POST` | `/api/v1/documents/{id}/process` | Process a document again after a failure |
+| `DELETE` | `/api/v1/documents/{id}` | Delete an upload, its text and topic map |
 | `GET` | `/api/v1/documents/{id}/summary` | Return extracted topics and source summary |
 | `PUT` | `/api/v1/sessions/{id}/context` | Update/confirm prepared scope |
 | `PUT` | `/api/v1/sessions/{id}/config` | Set common question style, difficulty, and count |
@@ -419,12 +434,12 @@ All session/document/job endpoints must authorize access to the resource owner. 
 |---|---|
 | `users` | id, auth_provider (`google`/`github`), provider_user_id, email, display_name, default_avatar_key, created_at |
 | `documents` | id, owner_id, filename, storage_key, status, summary_json, created_at |
-| `document_chunks` | id, document_id, text, page/slide/section reference, chunk_index |
+| `document_chunks` | id, document_id, text, page, page_end, chunk_index |
 | `document_topics` | id, document_id, name, summary, chunk_ids |
 | `sessions` | id, owner_id, input_model, state, context_json, config_json, created_at |
 | `preparation_messages` | id, session_id, position, role, kind (request, reply, skip, question, summary), content, created_at |
 | `rubrics` | id, version, name, criteria_json, max_score, created_at |
-| `questions` | id, session_id, sequence, type, competency, prompt, rubric_id, source_chunk_ids, supporting_quote, answer_key_json, grounding_status |
+| `questions` | id, session_id, sequence, type, competency, prompt, rubric_id, source_chunk_ids, supporting_quote, answer_key_json, grounding_status, grounding_note |
 | `answers` | id, question_id (unique), session_id, text, submitted_at |
 | `evaluations` | id, answer_id (unique), scores_json, evidence_json, evaluator_version |
 | `reports` | id, session_id, summary_json, generated_at |
@@ -588,7 +603,7 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** M0–M8 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, and the Model A clarification chat. Model B documents (M9), adaptive mode and deployment (M10), and the benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** M0–M9 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, the Model A clarification chat, and Model B document interviews with verified source references. Adaptive mode and deployment (M10) and the benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
 
 
@@ -806,6 +821,6 @@ These systems must remain independently configurable.
 
 ## License
 
-To be decided by the team before public release.
+To be decided by the team before public release. Note: PyMuPDF, used to read PDFs, is licensed under the AGPL-3.0 (or a commercial licence from Artifex). Distributing InterAct, or running it as a public web service, with PyMuPDF requires offering the source under AGPL-compatible terms. Replacing it (for example with pypdf, BSD-licensed) would remove this constraint.
 
 
