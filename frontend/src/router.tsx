@@ -2,6 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router'
 import RequireAuth from './auth/RequireAuth.tsx'
 import Layout from './components/Layout.tsx'
 import ConfigurePage from './pages/ConfigurePage.tsx'
+import DocumentPage from './pages/DocumentPage.tsx'
 import HistoryPage from './pages/HistoryPage.tsx'
 import HomePage from './pages/HomePage.tsx'
 import CallPage from './pages/CallPage.tsx'
@@ -25,9 +26,11 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'new', element: <PreparePage /> },
           { path: 'new/form', element: <TopicPage /> },
+          { path: 'new/document', element: <DocumentPage /> },
           { path: 'history', element: <HistoryPage /> },
           { path: 'sessions/:id/prepare', element: <PreparePage /> },
           { path: 'sessions/:id/topic', element: <TopicPage /> },
+          { path: 'sessions/:id/document', element: <DocumentPage /> },
           { path: 'sessions/:id/configure', element: <ConfigurePage /> },
           { path: 'sessions/:id/plan', element: <PlanPage /> },
           { path: 'sessions/:id/interview', element: <CallPage /> },

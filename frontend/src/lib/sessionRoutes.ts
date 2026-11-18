@@ -1,10 +1,10 @@
-import type { SessionState } from '../api/types'
+import type { InputModel, SessionState } from '../api/types'
 
 /** The page where a session in this state continues. */
-export function pathForSession(id: string, state: SessionState): string {
+export function pathForSession(id: string, state: SessionState, inputModel: InputModel = 'TOPIC'): string {
   switch (state) {
     case 'PREPARING':
-      return `/sessions/${id}/prepare`
+      return inputModel === 'DOCUMENT' ? `/sessions/${id}/document` : `/sessions/${id}/prepare`
     case 'CONFIGURING':
       return `/sessions/${id}/configure`
     case 'READY':

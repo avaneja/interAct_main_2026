@@ -94,7 +94,7 @@ export default function CallPage() {
   }
   const { session, question } = loaded.data
   if (!['IN_PROGRESS', 'PAUSED', 'EVALUATING'].includes(session.state)) {
-    return <Navigate to={pathForSession(session.id, session.state)} replace />
+    return <Navigate to={pathForSession(session.id, session.state, session.input_model)} replace />
   }
   return <Call key={session.id} initialSession={session} initialQuestion={question} />
 }

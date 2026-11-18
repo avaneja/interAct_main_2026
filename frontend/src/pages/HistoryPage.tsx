@@ -79,7 +79,7 @@ function HistoryItem({ session }: { session: SessionView }) {
         </p>
       </div>
       <Link
-        to={pathForSession(session.id, session.state)}
+        to={pathForSession(session.id, session.state, session.input_model)}
         className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-800"
       >
         {ACTIONS[session.state]}

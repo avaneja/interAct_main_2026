@@ -33,7 +33,7 @@ export default function ConfigurePage() {
     )
   }
   const session = loaded.data
-  if (session.state !== 'CONFIGURING') return <Navigate to={pathForSession(session.id, session.state)} replace />
+  if (session.state !== 'CONFIGURING') return <Navigate to={pathForSession(session.id, session.state, session.input_model)} replace />
   return <ConfigureForm session={session} />
 }
 
@@ -143,8 +143,11 @@ function ConfigureForm({ session }: { session: SessionView }) {
 
         {error && <Alert title="Could not save your settings">{error}</Alert>}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link to={`/sessions/${session.id}/topic`} className="text-sm text-slate-300 hover:text-white">
-            ← Edit topic
+          <Link
+            to={session.input_model === 'DOCUMENT' ? `/sessions/${session.id}/document` : `/sessions/${session.id}/topic`}
+            className="text-sm text-slate-300 hover:text-white"
+          >
+            {session.input_model === 'DOCUMENT' ? '← Change topics' : '← Edit topic'}
           </Link>
           <Button type="submit" busy={saving}>
             {saving ? 'Saving…' : 'Review the plan'}

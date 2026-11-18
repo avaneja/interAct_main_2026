@@ -7,6 +7,8 @@ import { defineConfig } from '@playwright/test'
 // is quick, repeatable and never touches the development database.
 const DATABASE_FILE = join(tmpdir(), 'interact-e2e.db')
 const DATABASE = `sqlite+pysqlite:///${DATABASE_FILE}`
+// Uploaded notes go to a throwaway folder too, emptied at the start of each run.
+const UPLOAD_DIR = join(tmpdir(), 'interact-e2e-uploads')
 const BACKEND_PORT = 8001
 const FRONTEND_PORT = 5174
 
@@ -30,9 +32,9 @@ export default defineConfig({
     {
       command: [
         'cd ../backend',
-        `rm -f "${DATABASE_FILE}"`,
+        `rm -rf "${DATABASE_FILE}" "${UPLOAD_DIR}"`,
         `DATABASE_URL="${DATABASE}" .venv/bin/alembic upgrade head`,
-        `DATABASE_URL="${DATABASE}" LLM_PROVIDER=fake APP_ENV=development DEV_LOGIN=true .venv/bin/uvicorn app.main:app --port ${BACKEND_PORT}`,
+        `DATABASE_URL="${DATABASE}" UPLOAD_DIR="${UPLOAD_DIR}" LLM_PROVIDER=fake APP_ENV=development DEV_LOGIN=true .venv/bin/uvicorn app.main:app --port ${BACKEND_PORT}`,
       ].join(' && '),
       url: `http://127.0.0.1:${BACKEND_PORT}/api/v1/health`,
       reuseExistingServer: false,

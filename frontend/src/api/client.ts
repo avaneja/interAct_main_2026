@@ -3,9 +3,12 @@ import type {
   ChatReply,
   ChatStage,
   DeliverySignals,
+  DocumentSummary,
+  DocumentView,
   InputModel,
   InterviewConfig,
   InterviewContext,
+  JobView,
   Me,
   PreparationView,
   PrepareTurn,
@@ -78,11 +81,13 @@ function describe(detail: unknown, fallback: string): string {
 
 async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
   let response: Response
+  const form = body instanceof FormData
   try {
     response = await fetch(`${BASE_URL}${path}`, {
       method,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      // A FormData body sets its own multipart content type.
+      headers: body === undefined || form ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
       signal,
     })
   } catch (error) {
@@ -131,4 +136,15 @@ export const api = {
   resume: (id: string) => request<SessionView>('POST', session(id, 'resume')),
   finish: (id: string) => request<SessionView>('POST', session(id, 'finish')),
   report: (id: string, signal?: AbortSignal) => request<ReportView>('GET', session(id, 'report'), undefined, signal),
+  uploadDocument: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<DocumentView>('POST', '/documents', form)
+  },
+  listDocuments: (signal?: AbortSignal) => request<DocumentView[]>('GET', '/documents', undefined, signal),
+  documentSummary: (id: string, signal?: AbortSignal) =>
+    request<DocumentSummary>('GET', `/documents/${encodeURIComponent(id)}/summary`, undefined, signal),
+  processDocument: (id: string) => request<DocumentView>('POST', `/documents/${encodeURIComponent(id)}/process`),
+  deleteDocument: (id: string) => request<void>('DELETE', `/documents/${encodeURIComponent(id)}`),
+  job: (id: string, signal?: AbortSignal) => request<JobView>('GET', `/jobs/${encodeURIComponent(id)}`, undefined, signal),
 }

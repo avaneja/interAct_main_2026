@@ -22,8 +22,9 @@ export default function TopicPage() {
     )
   }
   const session = existing.data
-  if (session && !['PREPARING', 'CONFIGURING'].includes(session.state)) {
-    return <Navigate to={pathForSession(session.id, session.state)} replace />
+  if (session && (!['PREPARING', 'CONFIGURING'].includes(session.state) || session.input_model === 'DOCUMENT')) {
+    const to = session.input_model === 'DOCUMENT' && session.state === 'CONFIGURING' ? `/sessions/${session.id}/document` : pathForSession(session.id, session.state, session.input_model)
+    return <Navigate to={to} replace />
   }
   return <TopicForm key={session?.id ?? 'new'} session={session} />
 }

@@ -70,6 +70,16 @@ function Report({ summary }: { summary: ReportSummary }) {
         </Alert>
       )}
 
+      {summary.grounding && (
+        <Card>
+          <h2 className="font-semibold text-white">Grounded in your document</h2>
+          <p className="mt-1 text-sm text-slate-300">
+            {summary.grounding.verified} of {summary.grounding.questions} questions were checked against your document: each
+            one's quote was found on the page it cites ({summary.grounding.pass_rate ?? 0}%).
+          </p>
+        </Card>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <h2 className="font-semibold text-white">By competency</h2>
@@ -160,6 +170,7 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
         </span>
       </summary>
       <div className="space-y-4 border-t border-slate-800 p-4 text-sm">
+        {question.grounding && <SourceNote grounding={question.grounding} />}
         <div>
           <h3 className="font-semibold text-slate-200">Your answer</h3>
           <p className="mt-1 whitespace-pre-wrap text-slate-300">{question.answer ?? 'You did not answer this question.'}</p>
@@ -201,6 +212,7 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
             </ul>
           </div>
         )}
+        {question.document_points && <DocumentPoints points={question.document_points} />}
         {question.better_answer_outline.length > 0 && (
           <div>
             <h3 className="font-semibold text-slate-200">A stronger answer would cover</h3>
@@ -230,6 +242,55 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
 }
 
 const percent = (ratio: number | null) => (ratio === null ? '–' : `${Math.round(ratio * 100)}%`)
+
+function sourcePages(sources: NonNullable<QuestionReport['grounding']>['sources']): string {
+  const labels = sources.map(({ page, page_end }) =>
+    page === null ? 'your document' : page_end && page_end !== page ? `pages ${page}–${page_end}` : `page ${page}`,
+  )
+  return [...new Set(labels)].join(', ')
+}
+
+function SourceNote({ grounding }: { grounding: NonNullable<QuestionReport['grounding']> }) {
+  return (
+    <div className="rounded-lg bg-slate-950/60 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+        {grounding.sources.length > 0 ? `From your document, ${sourcePages(grounding.sources)}` : 'From your document'}
+      </p>
+      {grounding.supporting_quote && (
+        <blockquote className="mt-2 border-l-2 border-emerald-500 pl-3 italic text-slate-300">“{grounding.supporting_quote}”</blockquote>
+      )}
+      {grounding.status === 'FLAGGED' && (
+        <p className="mt-2 text-amber-200">Not verified: {grounding.note ?? 'the source could not be checked'}. Check it against your notes.</p>
+      )}
+    </div>
+  )
+}
+
+function DocumentPoints({ points }: { points: NonNullable<QuestionReport['document_points']> }) {
+  if (points.supported.length === 0 && points.outside.length === 0) return null
+  const list = (items: typeof points.supported) => (
+    <ul className="mt-1 space-y-1.5">
+      {items.map((item) => (
+        <li key={item.quote} className="text-slate-300">
+          {item.point} <span className="italic text-slate-500">(you said “{item.quote}”)</span>
+        </li>
+      ))}
+    </ul>
+  )
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <div>
+        <h3 className="font-semibold text-emerald-300">Supported by your document</h3>
+        {points.supported.length ? list(points.supported) : <p className="mt-1 text-slate-500">Nothing from the document.</p>}
+      </div>
+      <div>
+        <h3 className="font-semibold text-sky-300">Beyond your document</h3>
+        <p className="text-xs text-slate-500">Outside knowledge: not wrong for that reason, but not in your notes.</p>
+        {points.outside.length ? list(points.outside) : <p className="mt-1 text-slate-500">Nothing beyond it.</p>}
+      </div>
+    </div>
+  )
+}
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (

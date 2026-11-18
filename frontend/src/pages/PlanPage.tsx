@@ -22,7 +22,7 @@ export default function PlanPage() {
   }
   const session = loaded.data
   if (!['CONFIGURING', 'READY'].includes(session.state) || !session.config) {
-    return <Navigate to={pathForSession(session.id, session.state)} replace />
+    return <Navigate to={pathForSession(session.id, session.state, session.input_model)} replace />
   }
   return <PlanReview session={session} />
 }

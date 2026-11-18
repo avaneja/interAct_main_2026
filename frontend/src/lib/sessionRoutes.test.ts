@@ -13,4 +13,8 @@ describe('where a session continues', () => {
   ] as const)('%s continues at %s', (state, path) => {
     expect(pathForSession('s-1', state)).toBe(path)
   })
+  it('a document interview being prepared continues at its document page', () => {
+    expect(pathForSession('s-1', 'PREPARING', 'DOCUMENT')).toBe('/sessions/s-1/document')
+    expect(pathForSession('s-1', 'CONFIGURING', 'DOCUMENT')).toBe('/sessions/s-1/configure')
+  })
 })

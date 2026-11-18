@@ -52,6 +52,37 @@ describe('report page', () => {
     expect(screen.getByText(/scored together with your answer/)).toBeVisible()
   })
 
+  it('shows where a document question comes from, the pass rate, and points sorted by source', async () => {
+    const report = makeReport()
+    report.summary.grounding = { questions: 2, verified: 1, flagged: 1, pass_rate: 50 }
+    report.summary.questions[0] = {
+      ...report.summary.questions[0],
+      grounding: { status: 'VERIFIED', note: null, sources: [{ page: 3, page_end: 4 }], supporting_quote: 'Each fold is held out once.' },
+      document_points: {
+        supported: [{ point: 'Folds are held out in turn', quote: 'each fold is tested once' }],
+        outside: [{ point: "Sklearn's KFold", quote: 'sklearn has KFold' }],
+      },
+    }
+    report.summary.questions[1] = {
+      ...report.summary.questions[1],
+      grounding: { status: 'FLAGGED', note: 'the supporting quote is not in the cited passage', sources: [], supporting_quote: null },
+    }
+    mockedApi.report.mockResolvedValue(report)
+    const user = userEvent.setup()
+    renderApp('/sessions/s-1/report')
+
+    expect(await screen.findByText('Grounded in your document')).toBeInTheDocument()
+    expect(screen.getByText(/1 of 2 questions were checked against your document/)).toBeInTheDocument()
+    await user.click(screen.getByText('What is a process?'))
+    expect(screen.getByText('From your document, pages 3–4')).toBeVisible()
+    expect(screen.getByText('“Each fold is held out once.”')).toBeVisible()
+    expect(screen.getByText('Supported by your document')).toBeVisible()
+    expect(screen.getByText(/Folds are held out in turn/)).toBeVisible()
+    expect(screen.getByText(/Sklearn's KFold/)).toBeVisible()
+    await user.click(screen.getByText(report.summary.questions[1].prompt))
+    expect(screen.getByText(/Not verified: the supporting quote is not in the cited passage/)).toBeVisible()
+  })
+
   it('shows delivery and focus apart from the score, with a note that they are estimates', async () => {
     mockedApi.report.mockResolvedValue(makeReport())
     renderApp('/sessions/s-1/report')

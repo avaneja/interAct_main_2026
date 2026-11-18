@@ -57,7 +57,9 @@ function PrepareSession({ id }: { id: string }) {
     )
   }
   const { session, preparation } = loaded.data
-  if (session.state !== 'PREPARING') return <Navigate to={pathForSession(session.id, session.state)} replace />
+  if (session.state !== 'PREPARING' || session.input_model === 'DOCUMENT') {
+    return <Navigate to={pathForSession(session.id, session.state, session.input_model)} replace />
+  }
   if (preparation.messages.length === 0) return <RequestForm sessionId={id} onSent={(view) => loaded.setData({ session, preparation: view })} />
   return <Chat id={id} initial={preparation} />
 }
@@ -120,9 +122,16 @@ function RequestForm({ sessionId, onSent }: { sessionId: string | null; onSent?:
           />
           {error && <Alert title="Could not start">{error}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link to={created ? `/sessions/${created}/topic` : '/new/form'} className="text-sm text-slate-300 hover:text-white">
-              Fill in a form instead
-            </Link>
+            <span className="flex flex-wrap gap-4">
+              <Link to={created ? `/sessions/${created}/topic` : '/new/form'} className="text-sm text-slate-300 hover:text-white">
+                Fill in a form instead
+              </Link>
+              {!created && (
+                <Link to="/new/document" className="text-sm text-slate-300 hover:text-white">
+                  Use your own notes (PDF or TXT)
+                </Link>
+              )}
+            </span>
             <Button type="submit" busy={sending}>
               {sending ? `${NAME} is reading…` : 'Continue'}
             </Button>

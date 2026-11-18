@@ -165,6 +165,21 @@ export interface QuestionReport {
   } | null
   better_answer_outline: string[]
   answer_key: { key_points: string[] } | null
+  /** Document interviews: where the question comes from and whether that was verified. */
+  grounding?: {
+    status: 'VERIFIED' | 'FLAGGED'
+    note: string | null
+    sources: { page: number | null; page_end: number | null }[]
+    supporting_quote: string | null
+  }
+  /** Document interviews: the candidate's points the document supports, and those beyond it. */
+  document_points?: { supported: SourcedPoint[]; outside: SourcedPoint[] }
+}
+
+export interface SourcedPoint {
+  point: string
+  /** The candidate's own words. */
+  quote: string
 }
 
 export interface CompetencyScore {
@@ -193,6 +208,8 @@ export interface ReportSummary {
   questions: QuestionReport[]
   /** How the answers were given; null when nothing was measured. Never part of the score. */
   delivery: DeliverySummary | null
+  /** Document interviews: how many questions were verified against the document. */
+  grounding?: { questions: number; verified: number; flagged: number; pass_rate: number | null } | null
 }
 
 export interface DeliverySummary {
@@ -233,4 +250,39 @@ export interface Me {
 export interface SignInOptions {
   providers: SignInProvider[]
   dev_login: boolean
+}
+
+export type DocumentStatus = 'UPLOADED' | 'PROCESSING' | 'READY' | 'FAILED'
+
+export interface DocumentView {
+  id: string
+  filename: string
+  status: DocumentStatus
+  /** When READY: the summary and counts; when FAILED: { error }. */
+  summary: { summary?: string; pages?: number | null; chunks?: number; error?: string } | null
+  created_at: string
+  expires_at: string
+  job_id: string | null
+}
+
+export interface DocumentTopicView {
+  id: string
+  name: string
+  summary: string | null
+  pages: number[]
+  chunks: number
+}
+
+export interface DocumentSummary {
+  document: DocumentView
+  topics: DocumentTopicView[]
+}
+
+export interface JobView {
+  id: string
+  kind: string
+  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
+  document_id: string | null
+  result: Record<string, unknown> | null
+  error: string | null
 }
