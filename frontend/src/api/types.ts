@@ -102,6 +102,35 @@ export interface DeliverySignals {
 
 export type ChatStage = 'warm_up' | 'closing'
 
+/** The candidate's request, reply or skip; the planner's question or scope summary. */
+export type PreparationKind = 'request' | 'reply' | 'skip' | 'question' | 'summary'
+
+export interface PreparationMessage {
+  role: 'user' | 'assistant'
+  kind: PreparationKind
+  content: string
+}
+
+/** The Model A clarification chat and the draft scope it has produced so far. */
+export interface PreparationView {
+  messages: PreparationMessage[]
+  /** The draft scope; not confirmed until it is saved with setContext. */
+  context: InterviewContext | null
+  /** The planner's question waiting for a reply, if any. */
+  question: string | null
+  /** The scope has been summarised. */
+  done: boolean
+  questions_asked: number
+  max_questions: number
+}
+
+/** The candidate's next turn: a reply, skipping the question, or asking for no more questions. */
+export interface PrepareTurn {
+  text?: string
+  skip?: boolean
+  enough?: boolean
+}
+
 export interface ChatReply {
   reply: string
   /** True when the closing conversation is over. */

@@ -12,16 +12,30 @@ test('a topic interview runs from the home page to the report', async ({ page })
   const signIn = await page.request.post('/api/v1/auth/dev/login')
   expect(signIn.status()).toBe(204)
 
-  // Home → topic.
+  // Home → describe the interview.
   await page.goto('/')
   await page.getByRole('link', { name: 'Get Started' }).click()
   await expect(page.getByRole('heading', { name: 'What do you want to practise?' })).toBeVisible()
 
-  await page.getByLabel('Topic', { exact: true }).fill('Operating systems')
-  await page.getByLabel('Goal (optional)').fill('software engineering internship')
-  await page.getByLabel('Your level (optional)').selectOption('intermediate')
-  await page.getByLabel('Subtopics to focus on (optional)').fill('processes, memory, scheduling')
-  await page.getByRole('button', { name: 'Continue to settings' }).click()
+  await page.getByLabel('Your interview').fill('Interview me on operating systems.')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+
+  // The interviewer clarifies the scope; the fake model asks two questions. One is answered, one skipped.
+  await expect(page.getByText('What role or goal are you preparing for?')).toBeVisible()
+  await page.getByLabel('Your reply').fill('A software engineering internship.')
+  await page.getByRole('button', { name: 'Send', exact: true }).click()
+  await expect(page.getByText('Which areas would you like to focus on?')).toBeVisible()
+  await page.getByRole('button', { name: 'Skip this question' }).click()
+  await expect(page.getByText(/^Here's the plan: an interview on operating systems\./)).toBeVisible()
+
+  // The proposed plan, edited, then confirmed: nothing moves on before that.
+  const plan = page.getByRole('form', { name: 'Your interview plan' })
+  await expect(plan.getByLabel('Topic', { exact: true })).toHaveValue('operating systems')
+  await plan.getByLabel('Topic', { exact: true }).fill('Operating systems')
+  await plan.getByLabel('Goal (optional)').fill('software engineering internship')
+  await plan.getByLabel('Your level (optional)').selectOption('intermediate')
+  await plan.getByLabel('Subtopics to focus on (optional)').fill('processes, memory, scheduling')
+  await plan.getByRole('button', { name: 'Confirm and choose settings' }).click()
 
   // Settings → plan.
   await expect(page.getByRole('heading', { name: 'Interview settings' })).toBeVisible()

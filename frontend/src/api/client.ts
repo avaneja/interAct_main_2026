@@ -7,6 +7,8 @@ import type {
   InterviewConfig,
   InterviewContext,
   Me,
+  PreparationView,
+  PrepareTurn,
   QuestionView,
   ReportView,
   SessionView,
@@ -112,6 +114,9 @@ export const api = {
   createSession: (inputModel: InputModel) => request<SessionView>('POST', '/sessions', { input_model: inputModel }),
   listSessions: (signal?: AbortSignal) => request<SessionView[]>('GET', '/sessions', undefined, signal),
   getSession: (id: string, signal?: AbortSignal) => request<SessionView>('GET', session(id), undefined, signal),
+  getPreparation: (id: string, signal?: AbortSignal) =>
+    request<PreparationView>('GET', session(id, 'prepare'), undefined, signal),
+  prepareMessage: (id: string, turn: PrepareTurn) => request<PreparationView>('POST', session(id, 'prepare/message'), turn),
   setContext: (id: string, context: InterviewContext) => request<SessionView>('PUT', session(id, 'context'), context),
   setConfig: (id: string, config: InterviewConfig) => request<SessionView>('PUT', session(id, 'config'), config),
   confirmPlan: (id: string) => request<SessionView>('POST', session(id, 'confirm')),

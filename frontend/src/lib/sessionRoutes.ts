@@ -4,7 +4,7 @@ import type { SessionState } from '../api/types'
 export function pathForSession(id: string, state: SessionState): string {
   switch (state) {
     case 'PREPARING':
-      return `/sessions/${id}/topic`
+      return `/sessions/${id}/prepare`
     case 'CONFIGURING':
       return `/sessions/${id}/configure`
     case 'READY':

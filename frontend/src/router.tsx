@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage.tsx'
 import CallPage from './pages/CallPage.tsx'
 import NotFoundPage from './pages/NotFoundPage.tsx'
 import PlanPage from './pages/PlanPage.tsx'
+import PreparePage from './pages/PreparePage.tsx'
 import ReportPage from './pages/ReportPage.tsx'
 import SignInPage from './pages/SignInPage.tsx'
 import TopicPage from './pages/TopicPage.tsx'
@@ -22,8 +23,10 @@ export const routes: RouteObject[] = [
         // Everything about interviews needs a signed-in user.
         element: <RequireAuth />,
         children: [
-          { path: 'new', element: <TopicPage /> },
+          { path: 'new', element: <PreparePage /> },
+          { path: 'new/form', element: <TopicPage /> },
           { path: 'history', element: <HistoryPage /> },
+          { path: 'sessions/:id/prepare', element: <PreparePage /> },
           { path: 'sessions/:id/topic', element: <TopicPage /> },
           { path: 'sessions/:id/configure', element: <ConfigurePage /> },
           { path: 'sessions/:id/plan', element: <PlanPage /> },

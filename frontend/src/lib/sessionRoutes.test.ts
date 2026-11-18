@@ -3,7 +3,7 @@ import { pathForSession } from './sessionRoutes'
 
 describe('where a session continues', () => {
   it.each([
-    ['PREPARING', '/sessions/s-1/topic'],
+    ['PREPARING', '/sessions/s-1/prepare'],
     ['CONFIGURING', '/sessions/s-1/configure'],
     ['READY', '/sessions/s-1/plan'],
     ['IN_PROGRESS', '/sessions/s-1/interview'],

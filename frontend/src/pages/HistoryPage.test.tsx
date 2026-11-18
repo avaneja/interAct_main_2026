@@ -27,7 +27,7 @@ describe('history page', () => {
     expect(within(items[0]).getByRole('link', { name: 'Resume' })).toHaveAttribute('href', '/sessions/a/interview')
     expect(within(items[1]).getByRole('link', { name: 'View report' })).toHaveAttribute('href', '/sessions/b/report')
     expect(within(items[2]).getByText('Untitled interview')).toBeInTheDocument()
-    expect(within(items[2]).getByRole('link', { name: 'Continue setup' })).toHaveAttribute('href', '/sessions/c/topic')
+    expect(within(items[2]).getByRole('link', { name: 'Continue setup' })).toHaveAttribute('href', '/sessions/c/prepare')
   })
 
   it('invites you to start when there are no interviews', async () => {

@@ -1,4 +1,4 @@
-import type { Difficulty } from '../api/types'
+import type { Difficulty, InterviewContext } from '../api/types'
 
 export const MAX_TEXT = 200
 const MAX_SUBTOPICS = 20
@@ -31,4 +31,26 @@ export function validateDraft(draft: Draft): Partial<Record<keyof Draft, string>
   else if (subtopics.some((s) => s.length > MAX_TEXT)) errors.subtopics = `Keep each subtopic under ${MAX_TEXT} characters.`
   else if (new Set(lowered).size !== lowered.length) errors.subtopics = 'Each subtopic should appear only once.'
   return errors
+}
+
+/** The topic interview context a valid draft describes. */
+export function toContext(draft: Draft): InterviewContext {
+  return {
+    input_model: 'TOPIC',
+    topic: draft.topic.trim(),
+    goal: draft.goal.trim() || null,
+    level: draft.level || null,
+    subtopics: parseSubtopics(draft.subtopics),
+  }
+}
+
+/** A draft to edit, from a saved or proposed context. */
+export function draftFromContext(context: InterviewContext | null | undefined): Draft {
+  if (!context) return EMPTY
+  return {
+    topic: context.topic,
+    goal: context.goal ?? '',
+    level: context.level ?? '',
+    subtopics: context.subtopics.join(', '),
+  }
 }

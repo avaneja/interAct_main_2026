@@ -28,9 +28,9 @@ describe('topic form rules', () => {
   })
 })
 
-describe('topic page', () => {
+describe('topic form page', () => {
   it('checks the form before calling the server', async () => {
-    renderApp('/new')
+    renderApp('/new/form')
 
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Continue to settings' }))
 
@@ -43,7 +43,7 @@ describe('topic page', () => {
     mockedApi.setContext.mockResolvedValue(configuring)
     mockedApi.getSession.mockResolvedValue(configuring)
     const user = userEvent.setup()
-    const router = renderApp('/new')
+    const router = renderApp('/new/form')
 
     await user.type(await screen.findByLabelText('Topic'), 'Operating systems')
     await user.type(screen.getByLabelText('Goal (optional)'), 'internship')
@@ -65,7 +65,7 @@ describe('topic page', () => {
     mockedApi.setContext.mockResolvedValueOnce(configuring)
     mockedApi.getSession.mockResolvedValue(configuring)
     const user = userEvent.setup()
-    renderApp('/new')
+    renderApp('/new/form')
 
     await user.type(await screen.findByLabelText('Topic'), 'Operating systems')
     await user.click(screen.getByRole('button', { name: 'Continue to settings' }))
