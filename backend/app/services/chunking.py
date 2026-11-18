@@ -10,11 +10,11 @@ Tokens are estimated from words (about four tokens for every three
 words), which is close enough for sizing chunks; no tokenizer is needed.
 """
 
-import math
 import re
 from dataclasses import dataclass
 
 from app.services.extraction import Page
+from app.services.tokens import estimate_tokens
 
 MIN_TOKENS = 400
 TARGET_TOKENS = 600
@@ -22,10 +22,6 @@ MAX_TOKENS = 800
 OVERLAP_TOKENS = 80
 
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[\"'(\[A-Z0-9])|\n{2,}")
-
-
-def estimate_tokens(text: str) -> int:
-    return math.ceil(len(text.split()) * 4 / 3)
 
 
 @dataclass(frozen=True)

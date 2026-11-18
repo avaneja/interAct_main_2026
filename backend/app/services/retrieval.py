@@ -15,7 +15,7 @@ from collections import Counter
 from collections.abc import Sequence
 from typing import Protocol, TypeVar
 
-from app.services.chunking import estimate_tokens
+from app.services.tokens import estimate_tokens
 
 K1 = 1.5
 B = 0.75

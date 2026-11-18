@@ -5,6 +5,7 @@ come from validated evaluations, quotes have been checked against the
 answers, and outlines were part of each validated evaluation.
 """
 
+import uuid
 from collections import Counter
 from datetime import UTC, datetime
 from typing import Any
@@ -12,8 +13,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Answer, Evaluation, InterviewSession, Question
-from app.models.enums import StyleStatus
+from app.models import Answer, DocumentChunk, Evaluation, InterviewSession, Question
+from app.models.enums import GroundingStatus, StyleStatus
 from app.services.delivery import summarise
 
 LABEL = "Rubric-based practice estimate"
@@ -27,6 +28,16 @@ def _percent(score: int, max_score: int) -> int | None:
 def _aware(moment: datetime) -> datetime:
     # SQLite returns naive datetimes; PostgreSQL returns aware ones.
     return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
+
+
+def _sources(db: Session, question: Question) -> list[dict[str, Any]]:
+    """Where a document question comes from: the pages of each cited chunk."""
+    sources = []
+    for chunk_id in question.source_chunk_ids:
+        chunk = db.get(DocumentChunk, uuid.UUID(chunk_id))
+        if chunk is not None:
+            sources.append({"page": chunk.page, "page_end": chunk.page_end})
+    return sources
 
 
 def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -> dict[str, Any]:
@@ -49,6 +60,7 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
     low_confidence: list[int] = []
     off_style: list[int] = []
     instructed: list[int] = []
+    ungrounded: list[int] = []
     quotes_removed = 0
 
     for question in questions:
@@ -71,6 +83,15 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
             # Revealed only once the question has been answered.
             "answer_key": question.answer_key_json if answer else None,
         }
+        if question.grounding_status is not GroundingStatus.NOT_APPLICABLE:
+            entry["grounding"] = {
+                "status": question.grounding_status.value,
+                "note": question.grounding_note,
+                "sources": _sources(db, question),
+                "supporting_quote": question.supporting_quote if answer else None,
+            }
+            if question.grounding_status is GroundingStatus.FLAGGED:
+                ungrounded.append(question.sequence)
         if question.style_status is StyleStatus.FLAGGED:
             off_style.append(question.sequence)
 
@@ -118,6 +139,11 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
         notices.append(
             f"Question {', '.join(map(str, off_style))} did not fully match the requested question style."
         )
+    if ungrounded:
+        notices.append(
+            f"Question {', '.join(map(str, ungrounded))} could not be verified against your document; "
+            "check it against your notes."
+        )
     if instructed:
         notices.append(
             f"Answer {', '.join(map(str, instructed))} contained text addressed to the grader "
@@ -157,8 +183,23 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
         "areas_to_revise": weak + [name for name in not_covered if name not in weak],
         "notices": notices,
         "questions": entries,
+        # Document interviews only: how many questions were verified against the document.
+        "grounding": _grounding(questions),
         # How answers were given (pace, fillers, focus); never part of the score above.
         "delivery": summarise(
             [a.delivery_json for a in db.scalars(select(Answer).where(Answer.session_id == session.id)) if a.delivery_json]
         ),
+    }
+
+
+def _grounding(questions: list[Question]) -> dict[str, Any] | None:
+    checked = [q for q in questions if q.grounding_status is not GroundingStatus.NOT_APPLICABLE]
+    if not checked:
+        return None
+    verified = sum(1 for q in checked if q.grounding_status is GroundingStatus.VERIFIED)
+    return {
+        "questions": len(checked),
+        "verified": verified,
+        "flagged": len(checked) - verified,
+        "pass_rate": _percent(verified, len(checked)),
     }

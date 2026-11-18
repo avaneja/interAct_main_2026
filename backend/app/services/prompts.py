@@ -33,6 +33,7 @@ PROMPT_VERSIONS = {
     "closing": "closing-v1",
     "prepare_turn": "prepare-v1",
     "map_topics": "topics-v1",
+    "generate_document_question": "doc-question-v1",
 }
 
 DATA_TAGS = ("context", "previous_questions", "question", "answer_key", "answer", "conversation", "document")
@@ -65,6 +66,18 @@ QUESTION_SYSTEM = (
     "Write only the question the candidate will read: self-contained, with no answer, "
     "no hints and no preamble. "
     f"{DATA_RULE} "
+    "Reply with a single JSON object and nothing else."
+)
+
+DOCUMENT_QUESTION_SYSTEM = (
+    "You write one question for a practice interview about a document the candidate studied. "
+    "Follow the requested style exactly: its rules decide what the question must contain. "
+    "Base the question only on the passages in <document>: a candidate who studied them must be able to answer it "
+    "from them. Write only the question the candidate will read: self-contained, with no answer, no hints and no "
+    "preamble, and without saying 'according to the document'. "
+    "Give the id of the passage the question comes from, and copy one full sentence from that passage, word for "
+    "word, as the supporting quote. Write the answer key's points only from the passages. "
+    f"{DOCUMENT_DATA_RULE} {DATA_RULE} "
     "Reply with a single JSON object and nothing else."
 )
 
@@ -226,6 +239,64 @@ def question_request(
             "difficulty": config.difficulty.value,
             "sequence": sequence,
             "topic": context.topic,
+        },
+    )
+
+
+def document_question_request(
+    *,
+    context: InterviewContext,
+    config: InterviewConfig,
+    sequence: int,
+    question_type: QuestionType,
+    competency: str,
+    previous_prompts: list[str],
+    passages: list[tuple[str, str, str]],
+) -> LLMRequest:
+    """A question grounded in `passages`, (id, pages, text) triples such as ("c3", "page 4", "...")."""
+    style = STYLES[question_type]
+    previous = "\n".join(f"- {data(p)}" for p in previous_prompts) or "- none yet"
+    blocks = "\n\n".join(f"[{passage_id}] ({pages})\n{data(text)}" for passage_id, pages, text in passages)
+    reply_shape = json.dumps(
+        {
+            "type": question_type.value,
+            "competency": data(competency),
+            "difficulty": config.difficulty.value,
+            "prompt": "<the question>",
+            "source": "<the id of the passage it comes from, for example c3>",
+            "supporting_quote": "<one full sentence copied word for word from that passage>",
+            "answer_key": {"key_points": ["<a point a strong answer makes, from the passages>"]},
+        }
+    )
+    user = (
+        "<context>\n"
+        f"Document: {data(context.topic)}\n"
+        f"Candidate's goal: {data(context.goal or 'general practice')}\n"
+        f"Candidate's level: {context.level or config.difficulty}\n"
+        f"Focus of this question: {data(competency)}\n"
+        "</context>\n\n"
+        f"<document>\n{blocks}\n</document>\n\n"
+        f"This is question {sequence} of {config.question_count}.\n"
+        f"Difficulty: {config.difficulty.value} ({DIFFICULTY_GUIDE[config.difficulty]})\n\n"
+        f"Style: {style.label}\n"
+        f"The question must ask for {style.asks_for}.\n"
+        f"It must contain {style.must_include}.\n"
+        f'An example of the style only: "{style.example}"\n'
+        "Write a new question about the focus above, from the passages; never reuse or reword the example.\n\n"
+        "Earlier questions in this interview (do not repeat or closely paraphrase them):\n"
+        f"<previous_questions>\n{previous}\n</previous_questions>\n\n"
+        f"Reply with exactly this JSON shape:\n{reply_shape}"
+    )
+    return _request(
+        "generate_document_question",
+        DOCUMENT_QUESTION_SYSTEM,
+        user,
+        {
+            "question_type": question_type.value,
+            "competency": competency,
+            "difficulty": config.difficulty.value,
+            "sequence": sequence,
+            "passages": [{"id": passage_id, "text": text} for passage_id, _, text in passages],
         },
     )
 

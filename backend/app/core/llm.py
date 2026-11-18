@@ -108,6 +108,20 @@ class FakeLLM:
                     n=hints["sequence"], competency=hints["competency"], topic=hints["topic"]
                 ),
             }
+        if request.purpose == "generate_document_question":
+            # Cites the first passage and quotes its first sentence, so the quote always checks out.
+            template = FAKE_QUESTIONS.get(hints["question_type"], FAKE_QUESTIONS["CONCEPTUAL"])
+            passage = hints["passages"][0]
+            sentence = re.split(r"(?<=[.!?])\s+", passage["text"].strip())[0]
+            return {
+                "type": hints["question_type"],
+                "competency": hints["competency"],
+                "difficulty": hints["difficulty"],
+                "prompt": template.format(n=hints["sequence"], competency=hints["competency"], topic="the document"),
+                "source": passage["id"],
+                "supporting_quote": sentence,
+                "answer_key": {"key_points": [sentence]},
+            }
         if request.purpose == "classify_style":
             # The fake always agrees, so tests queue a reply to simulate a mismatch.
             return {"style": hints["question_type"], "reason": "Fake style check."}

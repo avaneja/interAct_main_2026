@@ -56,6 +56,8 @@ from app.core.llm import LLMClient, LLMError, LLMRequest
 from app.models import (
     Answer,
     Document,
+    DocumentChunk,
+    DocumentTopic,
     Evaluation,
     InterviewSession,
     LLMCall,
@@ -65,12 +67,22 @@ from app.models import (
     User,
 )
 from app.core.config import get_settings
-from app.models.enums import AuthProvider, InputModel, SessionState, StyleStatus, ValidationStatus
+from app.models.enums import (
+    AuthProvider,
+    DocumentStatus,
+    GroundingStatus,
+    InputModel,
+    QuestionType,
+    SessionState,
+    StyleStatus,
+    ValidationStatus,
+)
 from app.schemas import (
     AnswerEvaluation,
     CriterionScore,
     DeliverySignals,
     GeneratedQuestion,
+    GroundedQuestionReply,
     InterviewConfig,
     InterviewContext,
     InterviewerTurn,
@@ -80,6 +92,7 @@ from app.schemas import (
 )
 from app.services import prompts
 from app.services.delivery import delivery_record
+from app.services.grounding import quote_in, quote_problem
 from app.services.evidence import (
     REMOVED_MARKER,
     EvidenceCheck,
@@ -90,11 +103,14 @@ from app.services.evidence import (
     verify_evidence,
 )
 from app.services.question_styles import competency_for, question_type_for, style_rule_problem
+from app.services.retrieval import source_passages
 from app.services.reporting import build_report
 from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
+# Source text per document question, in tokens: a few passages, within the local model's 8K context.
+SOURCE_TOKENS = 2500
 STYLE_ATTEMPTS = 2
 MAX_FOLLOW_UPS = 2
 
@@ -196,7 +212,9 @@ def set_context(
     are replaced by concrete ones it suggests; the candidate can change them."""
     session = get_session(db, user, session_id)
     _check_context(db, user, session, context)
-    if llm is not None and needs_subtopics(context):
+    if context.input_model is InputModel.DOCUMENT:
+        context = _document_scope(db, context)
+    elif llm is not None and needs_subtopics(context):
         context = _suggest_subtopics(db, llm, session.id, context)  # Without a lock: it calls the model.
 
     session = get_session(db, user, session_id, lock=True)
@@ -206,6 +224,34 @@ def set_context(
         _move(session, Event.CONTEXT_READY)
     db.commit()
     return session
+
+
+def _document_scope(db: Session, context: InterviewContext) -> InterviewContext:
+    """A document interview covers the chosen topics (all of them if none are chosen), in document order.
+    Their names become the subtopics that questions rotate through."""
+    chunks = {
+        str(chunk.id): chunk
+        for chunk in db.scalars(select(DocumentChunk).where(DocumentChunk.document_id == context.document_id))
+    }
+
+    def first_mention(topic: DocumentTopic) -> tuple[int, int, str]:
+        cited = [chunks[i] for i in topic.chunk_ids if i in chunks]
+        if not cited:
+            return (10**6, 10**6, topic.name)
+        first = min(cited, key=lambda chunk: chunk.chunk_index)
+        found = first.text.casefold().find(topic.name.casefold())
+        return (first.chunk_index, found if found >= 0 else 10**6, topic.name)
+
+    topics = sorted(
+        db.scalars(select(DocumentTopic).where(DocumentTopic.document_id == context.document_id)), key=first_mention
+    )
+    chosen = [topic for topic in topics if topic.id in set(context.selected_topic_ids)] or list(topics)
+    return context.model_copy(
+        update={
+            "selected_topic_ids": [topic.id for topic in chosen],
+            "subtopics": list(dict.fromkeys(topic.name for topic in chosen))[:20],
+        }
+    )
 
 
 def _check_context(db: Session, user: User, session: InterviewSession, context: InterviewContext) -> None:
@@ -219,6 +265,13 @@ def _check_context(db: Session, user: User, session: InterviewSession, context: 
         )
         if document is None:
             raise InvalidInput("The document was not found.")
+        if document.status is not DocumentStatus.READY:
+            raise InvalidInput("The document is not ready yet: wait until it is processed.")
+        known = {
+            topic.id for topic in db.scalars(select(DocumentTopic).where(DocumentTopic.document_id == document.id))
+        }
+        if not set(context.selected_topic_ids) <= known:
+            raise InvalidInput("Choose topics from this document's topic list.")
 
 
 def set_config(
@@ -395,6 +448,8 @@ class CheckedQuestion:
     generated: GeneratedQuestion
     style_status: StyleStatus
     style_note: str | None = None
+    grounding_status: GroundingStatus = GroundingStatus.NOT_APPLICABLE
+    grounding_note: str | None = None
 
 
 def _style_problem(db: Session, llm: LLMClient, session_id: uuid.UUID, question: GeneratedQuestion) -> str | None:
@@ -428,6 +483,8 @@ def _generate_question(
     context, config = _confirmed_plan(session)
     question_type = question_type_for(config.question_type, sequence)
     competency = competency_for(context.topic, context.subtopics, sequence)
+    if context.input_model is InputModel.DOCUMENT:
+        return _generate_document_question(db, llm, session, context, config, sequence, question_type, competency)
     request = prompts.question_request(
         context=context,
         config=config,
@@ -449,6 +506,102 @@ def _generate_question(
     return CheckedQuestion(generated, StyleStatus.FLAGGED, problem)
 
 
+def _passages(
+    db: Session, context: InterviewContext, competency: str
+) -> list[DocumentChunk]:
+    """The document passages a question about `competency` is built from (see retrieval.source_passages)."""
+    everything = db.scalars(
+        select(DocumentChunk).where(DocumentChunk.document_id == context.document_id).order_by(DocumentChunk.chunk_index)
+    ).all()
+    topic = db.scalar(
+        select(DocumentTopic).where(DocumentTopic.document_id == context.document_id, DocumentTopic.name == competency)
+    )
+    mapped_ids = set(topic.chunk_ids) if topic else set()
+    mapped = [chunk for chunk in everything if str(chunk.id) in mapped_ids]
+    query = f"{competency} {topic.summary or '' if topic else ''}"
+    return source_passages(query, mapped, everything, SOURCE_TOKENS)
+
+
+def _pages(chunk: DocumentChunk) -> str:
+    if chunk.page is None:
+        return "no page numbers"
+    if chunk.page_end in (None, chunk.page):
+        return f"page {chunk.page}"
+    return f"pages {chunk.page}-{chunk.page_end}"
+
+
+def _generate_document_question(
+    db: Session,
+    llm: LLMClient,
+    session: InterviewSession,
+    context: InterviewContext,
+    config: InterviewConfig,
+    sequence: int,
+    question_type: QuestionType,
+    competency: str,
+) -> CheckedQuestion:
+    """Generate a question grounded in the document.
+
+    Its supporting quote must appear in the passage it cites (or, with the
+    citation corrected, in another passage it was given). A question that
+    fails this or its style check is regenerated; if the last try still
+    fails, it is kept and flagged with the reason, so the report can count
+    grounding failures honestly.
+    """
+    passages = _passages(db, context, competency)
+    if not passages:
+        raise Conflict("The document has no text to ask about; upload it again.")
+    labels = {f"c{chunk.chunk_index}": chunk for chunk in passages}
+    request = prompts.document_question_request(
+        context=context,
+        config=config,
+        sequence=sequence,
+        question_type=question_type,
+        competency=competency,
+        previous_prompts=[q.prompt for q in _questions(db, session.id)],
+        passages=[(label, _pages(chunk), chunk.text) for label, chunk in labels.items()],
+    )
+
+    def matches_request(reply: GroundedQuestionReply) -> None:
+        if reply.type is not question_type or reply.difficulty is not config.difficulty:
+            raise ValueError("the question does not match the requested type or difficulty")
+
+    checked: CheckedQuestion | None = None
+    for _ in range(STYLE_ATTEMPTS):
+        reply = _ask_llm(db, llm, request, GroundedQuestionReply, session_id=session.id, check=matches_request)
+        cited = [labels[label.strip()] for label in reply.source if label.strip() in labels]
+        problem = quote_problem(reply.supporting_quote)
+        source: list[DocumentChunk] = []
+        if problem is None:
+            source = [chunk for chunk in cited if quote_in(reply.supporting_quote, chunk.text)]
+            if not source:
+                # The quote may come from another passage it was given: cite that one instead.
+                source = [chunk for chunk in passages if quote_in(reply.supporting_quote, chunk.text)][:1]
+            if not source:
+                problem = "the supporting quote is not in the cited passage"
+        generated = GeneratedQuestion(
+            type=reply.type,
+            competency=competency,
+            difficulty=reply.difficulty,
+            prompt=reply.prompt,
+            source_chunk_ids=[chunk.id for chunk in (source or cited)],
+            supporting_quote=reply.supporting_quote if source or cited else None,
+            answer_key=reply.answer_key,
+        )
+        style = _style_problem(db, llm, session.id, generated)
+        checked = CheckedQuestion(
+            generated,
+            StyleStatus.FLAGGED if style else StyleStatus.PASSED,
+            style,
+            GroundingStatus.FLAGGED if problem else GroundingStatus.VERIFIED,
+            problem,
+        )
+        if style is None and problem is None:
+            break
+    assert checked is not None
+    return checked
+
+
 def _prepared(session: InterviewSession, sequence: int) -> CheckedQuestion | None:
     """The question prepared in the background for `sequence`, if there is a usable one."""
     prepared = session.prepared_json
@@ -459,6 +612,8 @@ def _prepared(session: InterviewSession, sequence: int) -> CheckedQuestion | Non
             GeneratedQuestion.model_validate(prepared["question"]),
             StyleStatus(prepared["style_status"]),
             prepared.get("style_note"),
+            GroundingStatus(prepared.get("grounding_status", GroundingStatus.NOT_APPLICABLE.value)),
+            prepared.get("grounding_note"),
         )
     except (KeyError, ValueError, ValidationError):
         return None
@@ -501,6 +656,8 @@ def prepare_next_question(db: Session, session_id: uuid.UUID, llm: LLMClient) ->
         "question": checked.generated.model_dump(mode="json"),
         "style_status": checked.style_status.value,
         "style_note": checked.style_note,
+        "grounding_status": checked.grounding_status.value,
+        "grounding_note": checked.grounding_note,
     }
     db.commit()
 
@@ -522,6 +679,8 @@ def _add_question(
         answer_key_json=generated.answer_key.model_dump() if generated.answer_key else None,
         style_status=checked.style_status,
         style_note=checked.style_note,
+        grounding_status=checked.grounding_status,
+        grounding_note=checked.grounding_note,
     )
     db.add(question)
     return question

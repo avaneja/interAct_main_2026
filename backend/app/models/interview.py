@@ -130,6 +130,8 @@ class Question(IdMixin, CreatedAtMixin, Base):
     grounding_status: Mapped[GroundingStatus] = mapped_column(
         enum_type(GroundingStatus), default=GroundingStatus.NOT_APPLICABLE
     )
+    # Why a document question could not be verified against its source.
+    grounding_note: Mapped[str | None] = mapped_column(Text)
     # Whether the question matches its requested style; the note says why not.
     style_status: Mapped[StyleStatus] = mapped_column(
         enum_type(StyleStatus), default=StyleStatus.UNCHECKED, server_default=StyleStatus.UNCHECKED.value

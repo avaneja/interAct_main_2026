@@ -296,3 +296,21 @@ class TopicMap(LLMOutput):
 
     summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1200)]
     topics: list[MappedTopic] = Field(min_length=1, max_length=12)
+
+
+class GroundedQuestionReply(LLMOutput):
+    """A document question as the generator returns it: the question, the passage it comes from
+    (an id such as "c3"), a sentence copied from that passage, and an answer key from the passages."""
+
+    type: QuestionType
+    competency: ShortText
+    difficulty: Difficulty
+    prompt: LongText
+    source: list[str] = Field(min_length=1, max_length=5)
+    supporting_quote: LongText
+    answer_key: AnswerKey
+
+    @field_validator("source", mode="before")
+    @classmethod
+    def one_or_many(cls, value: object) -> object:
+        return [value] if isinstance(value, str) else value
