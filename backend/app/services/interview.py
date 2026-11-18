@@ -267,11 +267,19 @@ ParsedT = TypeVar("ParsedT", bound=BaseModel)
 
 
 def _record_llm_call(
-    db: Session, *, session_id: uuid.UUID, request: LLMRequest, model: str, raw: str, status: ValidationStatus
+    db: Session,
+    *,
+    session_id: uuid.UUID | None,
+    request: LLMRequest,
+    model: str,
+    raw: str,
+    status: ValidationStatus,
+    document_id: uuid.UUID | None = None,
 ) -> None:
     db.add(
         LLMCall(
             session_id=session_id,
+            document_id=document_id,
             purpose=request.purpose,
             model=model,
             prompt_version=request.prompt_version,
@@ -288,7 +296,8 @@ def _ask_llm(
     request: LLMRequest,
     schema: type[ParsedT],
     *,
-    session_id: uuid.UUID,
+    session_id: uuid.UUID | None = None,
+    document_id: uuid.UUID | None = None,
     check: Callable[[ParsedT], None] = lambda parsed: None,
 ) -> ParsedT:
     """Ask the LLM until it returns output that passes the schema and `check`.
@@ -302,7 +311,7 @@ def _ask_llm(
             response = llm.complete(request)
         except LLMError as error:
             _record_llm_call(
-                db, session_id=session_id, request=request, model=llm.model,
+                db, session_id=session_id, document_id=document_id, request=request, model=llm.model,
                 raw=f"[provider error] {error}", status=ValidationStatus.INVALID,
             )
             continue
@@ -311,12 +320,12 @@ def _ask_llm(
             check(parsed)
         except (ValidationError, ValueError):
             _record_llm_call(
-                db, session_id=session_id, request=request, model=response.model,
+                db, session_id=session_id, document_id=document_id, request=request, model=response.model,
                 raw=response.text, status=ValidationStatus.INVALID,
             )
             continue
         _record_llm_call(
-            db, session_id=session_id, request=request, model=response.model,
+            db, session_id=session_id, document_id=document_id, request=request, model=response.model,
             raw=response.text, status=ValidationStatus.VALID,
         )
         return parsed

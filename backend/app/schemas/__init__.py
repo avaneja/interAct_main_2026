@@ -8,11 +8,13 @@ from app.schemas.interview import (
     InterviewConfig,
     InterviewContext,
     InterviewerTurn,
+    MappedTopic,
     PreparationTurn,
     QuestionView,
     SmallTalk,
     StyleVerdict,
     SuggestedSubtopics,
+    TopicMap,
 )
 
 __all__ = [
@@ -25,9 +27,11 @@ __all__ = [
     "InterviewConfig",
     "InterviewContext",
     "InterviewerTurn",
+    "MappedTopic",
     "PreparationTurn",
     "QuestionView",
     "SmallTalk",
     "StyleVerdict",
     "SuggestedSubtopics",
+    "TopicMap",
 ]

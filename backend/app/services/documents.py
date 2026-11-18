@@ -1,4 +1,4 @@
-"""Model B documents: upload checks and storage.
+"""Model B documents: upload checks, storage and processing.
 
 Rules enforced here (README 2.2):
 
@@ -10,6 +10,14 @@ Rules enforced here (README 2.2):
   gave is kept only for display, cleaned of paths and control characters.
 - A document belongs to the user who uploaded it; other users' documents
   look the same as missing ones.
+- Processing extracts the text, splits it into chunks and maps it into
+  topics. Every topic cites only chunks that exist: ids the model invents
+  are dropped, and a topic left without chunks is dropped (in a one-chunk
+  document, it cites that chunk). A document that
+  cannot be read or mapped is marked FAILED with the reason, and nothing
+  partial is used.
+- Small documents are mapped from their whole text; longer ones from the
+  opening words of every chunk, so the request fits the model's context.
 """
 
 import re
@@ -19,13 +27,21 @@ from pathlib import PurePath
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.llm import LLMClient
 from app.core.storage import FileStorage
-from app.models import Document, DocumentChunk, User
+from app.models import Document, DocumentChunk, DocumentTopic, User
 from app.models.enums import DocumentStatus
-from app.services.chunking import Chunk
-from app.services.interview import InvalidInput, NotFound
+from app.schemas import TopicMap
+from app.services import prompts
+from app.services.chunking import Chunk, chunk_pages, estimate_tokens
+from app.services.extraction import ExtractionError, extract
+from app.services.interview import InvalidInput, LLMUnavailable, NotFound, _ask_llm
 
 ALLOWED = {".pdf": "PDF", ".txt": "TXT"}
+# Up to this many tokens, the topic map reads the whole text; above it, each chunk's opening.
+# Bounded by the local model's 8K context, leaving room for the instructions and the reply.
+FULL_TEXT_TOKENS = 5000
+OPENING_WORDS = 60
 PDF_SIGNATURE = b"%PDF-"
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -105,3 +121,101 @@ def save_chunks(db: Session, document: Document, chunks: list[Chunk]) -> list[Do
     db.add_all(rows)
     db.commit()
     return rows
+
+
+def pages_label(page: int | None, page_end: int | None) -> str:
+    if page is None:
+        return "no page numbers"
+    if page_end is None or page_end == page:
+        return f"page {page}"
+    return f"pages {page}-{page_end}"
+
+
+def map_topics(db: Session, llm: LLMClient, document: Document, chunks: list[DocumentChunk]) -> TopicMap:
+    """Ask the model for the document's topics; only chunk ids that exist survive."""
+    ids = {f"c{chunk.chunk_index}": chunk for chunk in chunks}
+    shortened = sum(estimate_tokens(chunk.text) for chunk in chunks) > FULL_TEXT_TOKENS
+    entries = [
+        (
+            chunk_id,
+            pages_label(chunk.page, chunk.page_end),
+            " ".join(chunk.text.split()[:OPENING_WORDS]) if shortened else chunk.text,
+        )
+        for chunk_id, chunk in ids.items()
+    ]
+
+    def cited_only(topic_map: TopicMap) -> None:
+        kept = []
+        seen: set[str] = set()
+        for topic in topic_map.topics:
+            topic.chunk_ids = list(dict.fromkeys(chunk_id.strip() for chunk_id in topic.chunk_ids if chunk_id.strip() in ids))
+            if not topic.chunk_ids and len(ids) == 1:
+                # A one-chunk document: its only chunk is where every topic comes from.
+                topic.chunk_ids = list(ids)
+            if topic.chunk_ids and topic.name.casefold() not in seen:
+                seen.add(topic.name.casefold())
+                kept.append(topic)
+        if not kept:
+            raise ValueError("no topic cites a chunk of the document")
+        topic_map.topics = kept
+
+    request = prompts.topic_map_request(filename=document.filename, chunks=entries, shortened=shortened)
+    topic_map = _ask_llm(db, llm, request, TopicMap, document_id=document.id, check=cited_only)
+    db.execute(delete(DocumentTopic).where(DocumentTopic.document_id == document.id))
+    db.add_all(
+        DocumentTopic(
+            document_id=document.id,
+            name=topic.name,
+            summary=topic.summary,
+            chunk_ids=[str(ids[chunk_id].id) for chunk_id in topic.chunk_ids],
+        )
+        for topic in topic_map.topics
+    )
+    return topic_map
+
+
+def _fail(db: Session, document: Document, reason: str) -> Document:
+    db.rollback()
+    document.status = DocumentStatus.FAILED
+    document.summary_json = {"error": reason}
+    db.commit()
+    return document
+
+
+def process(db: Session, document: Document, storage: FileStorage, llm: LLMClient) -> Document:
+    """Extract, chunk and map a stored document. Ends READY, or FAILED with the reason."""
+    document.status = DocumentStatus.PROCESSING
+    document.summary_json = None
+    db.commit()
+    try:
+        pages = extract(storage.path(document.storage_key))
+    except ExtractionError as error:
+        return _fail(db, document, str(error))
+    chunks = save_chunks(db, document, chunk_pages(pages))
+    try:
+        topic_map = map_topics(db, llm, document, chunks)
+    except LLMUnavailable:
+        return _fail(db, document, "The model could not map the document's topics. Try processing it again.")
+    numbered = [page.number for page in pages if page.number is not None]
+    document.status = DocumentStatus.READY
+    document.summary_json = {
+        "summary": topic_map.summary,
+        "pages": max(numbered) if numbered else None,
+        "chunks": len(chunks),
+        "characters": sum(len(page.text) for page in pages),
+        "mapped_from": "openings" if sum(estimate_tokens(c.text) for c in chunks) > FULL_TEXT_TOKENS else "full text",
+    }
+    db.commit()
+    return document
+
+
+def topics_of(db: Session, document: Document) -> list[tuple[DocumentTopic, list[DocumentChunk]]]:
+    """The document's topics, each with the chunks it cites, in chunk order."""
+    chunks = {str(chunk.id): chunk for chunk in db.scalars(
+        select(DocumentChunk).where(DocumentChunk.document_id == document.id).order_by(DocumentChunk.chunk_index)
+    )}
+    topics = db.scalars(select(DocumentTopic).where(DocumentTopic.document_id == document.id)).all()
+    return [
+        (topic, sorted((chunks[i] for i in topic.chunk_ids if i in chunks), key=lambda c: c.chunk_index))
+        for topic in topics
+    ]

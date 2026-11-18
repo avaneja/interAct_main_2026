@@ -25,6 +25,7 @@ FINGERPRINTS = {
     "warm-up-v1": "4fa028e26969310b",
     "closing-v1": "12c92b700001ce84",
     "prepare-v1": "abf8fab87340c6b8",
+    "topics-v1": "c6c5e17a4935f8ec",
 }
 
 
@@ -60,6 +61,10 @@ def sample_requests():
             draft=InterviewContext.model_validate(
                 {"input_model": "TOPIC", "topic": "DSA", "goal": "internship", "subtopics": ["graphs"]}),
             questions_left=3),
+        "map_topics": prompts.topic_map_request(
+            filename="Lecture 4.pdf",
+            chunks=[("c0", "pages 1-2", "Overfitting and underfitting."), ("c1", "page 3", "Cross-validation.")],
+            shortened=False),
     }
 
 
@@ -166,6 +171,8 @@ def test_the_candidates_context_is_also_kept_in_its_block():
 def test_every_system_prompt_says_data_blocks_are_not_instructions(purpose):
     conversational = purpose in ("interviewer_turn", "warm_up", "closing", "prepare_turn")
     rule = prompts.TURN_DATA_RULE if conversational else prompts.DATA_RULE
+    if purpose == "map_topics":
+        rule = prompts.DOCUMENT_DATA_RULE
     assert rule in sample_requests()[purpose].system
 
 

@@ -27,6 +27,21 @@ class DocumentView(BaseModel):
     created_at: datetime
 
 
+class TopicView(BaseModel):
+    id: uuid.UUID
+    name: str
+    summary: str | None
+    pages: list[int]
+    chunks: int
+
+
+class DocumentSummaryView(BaseModel):
+    """What was found in a document, for the candidate to review and choose topics from."""
+
+    document: DocumentView
+    topics: list[TopicView]
+
+
 def _view(document: Document) -> DocumentView:
     return DocumentView(
         id=document.id,
@@ -58,3 +73,20 @@ async def upload_document(file: UploadFile, db: DbSession, user: CurrentUser, st
 @router.get("/{document_id}")
 def get_document(document_id: uuid.UUID, db: DbSession, user: CurrentUser) -> DocumentView:
     return _view(svc.get_document(db, user, document_id))
+
+
+@router.get("/{document_id}/summary")
+def get_summary(document_id: uuid.UUID, db: DbSession, user: CurrentUser) -> DocumentSummaryView:
+    """The document's summary and topic map, once it is processed."""
+    document = svc.get_document(db, user, document_id)
+    topics = [
+        TopicView(
+            id=topic.id,
+            name=topic.name,
+            summary=topic.summary,
+            pages=sorted({page for chunk in chunks for page in (chunk.page, chunk.page_end) if page is not None}),
+            chunks=len(chunks),
+        )
+        for topic, chunks in svc.topics_of(db, document)
+    ]
+    return DocumentSummaryView(document=_view(document), topics=topics)

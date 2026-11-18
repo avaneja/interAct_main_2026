@@ -148,6 +148,16 @@ class FakeLLM:
             topic = hints["topic"]
             return {"subtopics": [f"{topic} fundamentals", f"{topic} in practice", f"common {topic} pitfalls",
                                   f"{topic} trade-offs"]}
+        if request.purpose == "map_topics":
+            # One topic per three chunks, named after the first words of its first chunk.
+            chunks = hints["chunks"]
+            topics = []
+            for start in range(0, len(chunks), 3):
+                group = chunks[start : start + 3]
+                name = " ".join(group[0]["text"].split()[:4]) or f"Part {start // 3 + 1}"
+                topics.append({"name": name, "summary": f"What the document says about {name}.",
+                               "chunk_ids": [chunk["id"] for chunk in group]})
+            return {"summary": f"A document in {len(chunks)} parts.", "topics": topics}
         if request.purpose == "prepare_turn":
             # Keeps the draft, or takes the topic from the request; asks two questions, then stops.
             draft = hints["draft"] or {}

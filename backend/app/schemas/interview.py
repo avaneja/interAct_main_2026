@@ -283,3 +283,16 @@ class PreparationTurn(LLMOutput):
             if text and text.casefold() not in {k.casefold() for k in kept}:
                 kept.append(text)
         return kept[:20]
+
+
+class MappedTopic(LLMOutput):
+    name: ShortText
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, max_length=600)] | None = None
+    chunk_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class TopicMap(LLMOutput):
+    """A document's topics, each with the chunks that cover it, and a short summary of the whole."""
+
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1200)]
+    topics: list[MappedTopic] = Field(min_length=1, max_length=12)
