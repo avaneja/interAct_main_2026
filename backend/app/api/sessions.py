@@ -17,11 +17,15 @@ from app.schemas.api import (
     ChatMessage,
     ChatReplyView,
     PlannedQuestion,
+    PrepareMessage,
+    PreparationMessageView,
+    PreparationView,
     ReportView,
     SessionCreate,
     SessionView,
 )
 from app.services import interview as svc
+from app.services import preparation
 from app.services.question_styles import competency_for, mix_plan
 
 router = APIRouter(prefix="/api/v1/sessions", tags=["sessions"])
@@ -93,6 +97,37 @@ def list_sessions(db: DbSession, user: CurrentUser) -> list[SessionView]:
 @router.get("/{session_id}")
 def get_session(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> SessionView:
     return _view(db, svc.get_session(db, user, session_id))
+
+
+def _preparation_view(prepared: preparation.Preparation) -> PreparationView:
+    return PreparationView(
+        messages=[
+            PreparationMessageView(role=message.role.value, kind=message.kind, content=message.content)
+            for message in prepared.messages
+        ],
+        context=prepared.context.model_dump(mode="json") if prepared.context else None,
+        question=prepared.question,
+        done=prepared.done,
+        questions_asked=prepared.questions_asked,
+        max_questions=preparation.MAX_QUESTIONS,
+    )
+
+
+@router.get("/{session_id}/prepare")
+def get_preparation(session_id: uuid.UUID, db: DbSession, user: CurrentUser) -> PreparationView:
+    """The clarification chat so far and the draft scope."""
+    return _preparation_view(preparation.get_preparation(db, user, session_id))
+
+
+@router.post("/{session_id}/prepare/message")
+def prepare_message(
+    session_id: uuid.UUID, body: PrepareMessage, db: DbSession, user: CurrentUser, llm: LLM
+) -> PreparationView:
+    """Model A clarification: the candidate's request or reply, then the planner's next
+    question or a summary of the scope. Confirm the scope with PUT /context."""
+    return _preparation_view(
+        preparation.send_message(db, user, session_id, body.text, llm, skip=body.skip, enough=body.enough)
+    )
 
 
 @router.put("/{session_id}/context")

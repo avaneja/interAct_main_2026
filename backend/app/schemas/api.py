@@ -76,6 +76,38 @@ class ChatReplyView(BaseModel):
     done: bool
 
 
+class PrepareMessage(BaseModel):
+    """The candidate's next turn in the clarification chat.
+
+    `skip` passes on the planner's current question; `enough` asks for no more
+    questions, so the planner summarises the scope.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)] = ""
+    skip: bool = False
+    enough: bool = False
+
+
+class PreparationMessageView(BaseModel):
+    role: Literal["user", "assistant"]
+    kind: Literal["request", "reply", "skip", "question", "summary"]
+    content: str
+
+
+class PreparationView(BaseModel):
+    """The clarification chat. `context` is the draft scope, not confirmed until
+    PUT /context; `question` is waiting for a reply; `done` means the scope was summarised."""
+
+    messages: list[PreparationMessageView]
+    context: dict[str, Any] | None
+    question: str | None
+    done: bool
+    questions_asked: int
+    max_questions: int
+
+
 class ReportView(BaseModel):
     session_id: uuid.UUID
     generated_at: datetime

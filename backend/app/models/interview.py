@@ -60,11 +60,23 @@ class PreparationMessage(IdMixin, CreatedAtMixin, Base):
     """One turn of the Model A clarification chat."""
 
     __tablename__ = "preparation_messages"
+    __table_args__ = (
+        UniqueConstraint("session_id", "position"),
+        CheckConstraint("position >= 1", name="position_positive"),
+        CheckConstraint(
+            "kind IN ('request', 'reply', 'skip', 'question', 'summary')", name="kind_known"
+        ),
+    )
 
     session_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("sessions.id", ondelete="CASCADE"), index=True
     )
+    # The order of the chat, 1 first; timestamps can tie.
+    position: Mapped[int] = mapped_column(Integer)
     role: Mapped[MessageRole] = mapped_column(enum_type(MessageRole))
+    # The candidate's "request" (what they want to practise), "reply" or "skip";
+    # the planner's clarification "question" or scope "summary".
+    kind: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
 
 

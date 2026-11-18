@@ -148,6 +148,21 @@ class FakeLLM:
             topic = hints["topic"]
             return {"subtopics": [f"{topic} fundamentals", f"{topic} in practice", f"common {topic} pitfalls",
                                   f"{topic} trade-offs"]}
+        if request.purpose == "prepare_turn":
+            # Keeps the draft, or takes the topic from the request; asks two questions, then stops.
+            draft = hints["draft"] or {}
+            topic = draft.get("topic") or re.sub(
+                r"^\W*(please\s+)?(interview|quiz|test)\s+me\s+(on|about)\s+", "", hints["request"], flags=re.IGNORECASE
+            )[:80].strip(" .") or "General practice"
+            questions = ["What role or goal are you preparing for?", "Which areas would you like to focus on?"]
+            asked = hints["asked"]
+            return {
+                "topic": topic,
+                "goal": draft.get("goal"),
+                "level": draft.get("level"),
+                "subtopics": draft.get("subtopics", []),
+                "question": questions[asked] if hints["questions_left"] > 0 and asked < len(questions) else None,
+            }
         if request.purpose == "interviewer_turn":
             # The fake never asks a follow-up, so tests queue a reply to get one.
             return {

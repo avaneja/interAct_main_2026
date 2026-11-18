@@ -31,6 +31,7 @@ PROMPT_VERSIONS = {
     "suggest_subtopics": "subtopics-v1",
     "warm_up": "warm-up-v1",
     "closing": "closing-v1",
+    "prepare_turn": "prepare-v1",
 }
 
 DATA_TAGS = ("context", "previous_questions", "question", "answer_key", "answer", "conversation")
@@ -110,6 +111,25 @@ CLOSING_SYSTEM = (
     "Speak plain English for listening: no lists, markdown or emoji. "
     f"{TURN_DATA_RULE} "
     'Reply with a single JSON object and nothing else: {"reply": "<your words>", "done": true or false}'
+)
+
+PREPARE_SYSTEM = (
+    "You help a candidate plan a practice interview before it starts, in a short chat. "
+    "You are a planner, not the interviewer: never ask questions that test their knowledge of the topic. Rules:\n"
+    "1. From everything the candidate has said, work out the interview topic, their goal (for example a role, "
+    "an internship, an exam or a course), their level (beginner, intermediate or advanced) and the subtopics "
+    "they want to focus on. Use only what they said or clearly implied; leave the goal or level null and the "
+    "subtopics empty when they have not said them. Keep subtopics they named, in their words, and drop ones "
+    "they asked to remove.\n"
+    "2. If you may ask another question, ask about the first thing still missing, in this order: their goal, "
+    "their level, then which areas to focus on. Do not ask about areas when they already named some. "
+    "A skipped question counts as answered: move on to the next item. "
+    "Never ask about something they already answered or skipped, and never repeat an earlier question.\n"
+    "3. Set \"question\" to null only when the goal, level and areas are all known or skipped, "
+    "or when you may not ask more.\n"
+    "4. A question is one short, friendly sentence in plain spoken English: no lists, markdown or emoji.\n"
+    f"{TURN_DATA_RULE} "
+    "Reply with a single JSON object and nothing else."
 )
 
 TURN_SYSTEM = (
@@ -353,3 +373,50 @@ def closing_request(*, topic: str, candidate_name: str | None, question: str) ->
         f"Candidate: {data(question)}\n</conversation>"
     )
     return _request("closing", CLOSING_SYSTEM, user, {"text": question})
+
+
+def prepare_turn_request(
+    *,
+    conversation: list[tuple[str, str]],
+    draft: InterviewContext | None,
+    questions_left: int,
+) -> LLMRequest:
+    """The planner's next step in the Model A clarification chat.
+
+    `conversation` is the chat so far as (speaker, text) pairs, speaker being
+    "Candidate" or "Planner"; a skipped question is a candidate line saying so.
+    `draft` is the scope worked out so far, if any.
+    """
+    lines = "\n".join(f"{speaker}: {data(text)}" for speaker, text in conversation)
+    if draft is None:
+        plan = "nothing yet"
+    else:
+        plan = (
+            f"topic: {data(draft.topic)}; goal: {data(draft.goal or 'not given')}; "
+            f"level: {draft.level or 'not given'}; "
+            f"subtopics: {', '.join(data(subtopic) for subtopic in draft.subtopics) or 'none given'}"
+        )
+    if questions_left > 0:
+        ask_rule = f"You may ask {questions_left} more question(s); ask one only if it is needed."
+    else:
+        ask_rule = 'You may not ask any more questions: set "question" to null.'
+    user = (
+        f"<context>\nThe plan so far: {plan}\n</context>\n\n"
+        f"<conversation>\n{lines}\n</conversation>\n\n"
+        f"{ask_rule}\n\n"
+        "Reply with exactly this JSON shape:\n"
+        '{"topic": "<topic>", "goal": "<goal>" or null, '
+        '"level": "beginner" or "intermediate" or "advanced" or null, '
+        '"subtopics": ["<subtopic>", ...], "question": "<one question>" or null}'
+    )
+    return _request(
+        "prepare_turn",
+        PREPARE_SYSTEM,
+        user,
+        {
+            "request": conversation[0][1] if conversation else "",
+            "draft": draft.model_dump(mode="json") if draft else None,
+            "questions_left": questions_left,
+            "asked": sum(1 for speaker, _ in conversation if speaker == "Planner"),
+        },
+    )

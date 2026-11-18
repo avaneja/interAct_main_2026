@@ -61,6 +61,8 @@ def adas_session(ada):
 def every_session_request(sid, question_id):
     return [
         ("GET", f"/api/v1/sessions/{sid}", None),
+        ("GET", f"/api/v1/sessions/{sid}/prepare", None),
+        ("POST", f"/api/v1/sessions/{sid}/prepare/message", {"text": "Interview me on Bob's topic"}),
         ("PUT", f"/api/v1/sessions/{sid}/context", CONTEXT),
         ("PUT", f"/api/v1/sessions/{sid}/config", CONFIG),
         ("POST", f"/api/v1/sessions/{sid}/confirm", None),
@@ -68,6 +70,7 @@ def every_session_request(sid, question_id):
         ("GET", f"/api/v1/sessions/{sid}/current-question", None),
         ("POST", f"/api/v1/sessions/{sid}/answers", {"question_id": question_id, "text": "Bob's answer"}),
         ("POST", f"/api/v1/sessions/{sid}/retry", None),
+        ("POST", f"/api/v1/sessions/{sid}/chat", {"stage": "warm_up", "text": "I am Bob."}),
         ("POST", f"/api/v1/sessions/{sid}/pause", None),
         ("POST", f"/api/v1/sessions/{sid}/resume", None),
         ("POST", f"/api/v1/sessions/{sid}/finish", None),

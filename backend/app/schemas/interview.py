@@ -10,7 +10,7 @@ bodies.
 import uuid
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app.models.enums import Difficulty, GroundingStatus, InputModel, QuestionType
 
@@ -230,3 +230,56 @@ class AnswerEvaluation(LLMOutput):
             raise ValueError("score must equal the sum of the criteria scores")
         self.max_score, self.score = max_total, total
         return self
+
+
+class PreparationTurn(LLMOutput):
+    """The planner's reading of the clarification chat so far, and its next question.
+
+    Lenient where models are sloppy: an empty goal or question, an unknown
+    level and repeated subtopics are dropped rather than failing the turn.
+    """
+
+    topic: ShortText
+    goal: str | None = None
+    level: Difficulty | None = None
+    subtopics: list[str] = Field(default_factory=list)
+    question: str | None = None
+
+    @field_validator("goal", "question", mode="before")
+    @classmethod
+    def blank_is_none(cls, value: object) -> object:
+        if isinstance(value, str) and (not value.strip() or value.strip().lower() in {"null", "none", "n/a"}):
+            return None
+        return value
+
+    @field_validator("goal")
+    @classmethod
+    def short_goal(cls, value: str | None) -> str | None:
+        return value[:200].strip() if value else None
+
+    @field_validator("question")
+    @classmethod
+    def short_question(cls, value: str | None) -> str | None:
+        if value is not None and len(value) > 400:
+            raise ValueError("the question is too long")
+        return value
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def known_level(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip().lower()
+            return value if value in {level.value for level in Difficulty} else None
+        return value
+
+    @field_validator("subtopics", mode="before")
+    @classmethod
+    def clean_subtopics(cls, value: object) -> object:
+        if not isinstance(value, list):
+            return []
+        kept: list[str] = []
+        for item in value:
+            text = str(item).strip()[:200] if item is not None else ""
+            if text and text.casefold() not in {k.casefold() for k in kept}:
+                kept.append(text)
+        return kept[:20]
