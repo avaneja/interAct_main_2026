@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     # Uploaded documents (Model B). Kept outside anything served to the browser.
     upload_dir: Path = BACKEND_DIR / "uploads"
     max_upload_mb: int = Field(default=20, ge=1, le=100)
+    # Uploads are deleted this many days after upload, unless an unfinished interview uses them.
+    document_retention_days: int = Field(default=30, ge=1, le=365)
 
     @field_validator("upload_dir", mode="before")
     @classmethod

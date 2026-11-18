@@ -19,10 +19,16 @@ Rules enforced here (README 2.2):
   partial is used.
 - Small documents are mapped from their whole text; longer ones from the
   opening words of every chunk, so the request fits the model's context.
+- Retention: a document can be deleted by its owner, and is deleted
+  automatically `retention_days` after upload. Deleting removes the file,
+  its chunks and its topic map. A document that an unfinished interview
+  uses is kept until the interview ends. Finished reports keep the
+  questions and quotes they showed, but no longer link to the document.
 """
 
 import re
 import uuid
+from datetime import datetime, timedelta
 from pathlib import PurePath
 
 from sqlalchemy import delete, select
@@ -30,14 +36,15 @@ from sqlalchemy.orm import Session
 
 from app.core.llm import LLMClient
 from app.core.storage import FileStorage
-from app.models import Document, DocumentChunk, DocumentTopic, User
-from app.models.enums import DocumentStatus
+from app.models import Document, DocumentChunk, DocumentTopic, InterviewSession, User
+from app.models.base import utcnow
+from app.models.enums import DocumentStatus, InputModel, SessionState
 from app.schemas import TopicMap
 from app.services import prompts
 from app.services.chunking import Chunk, chunk_pages, estimate_tokens
 from app.services.extraction import ExtractionError, extract
 from app.services.retrieval import strong_matches
-from app.services.interview import InvalidInput, LLMUnavailable, NotFound, _ask_llm
+from app.services.interview import Conflict, InvalidInput, LLMUnavailable, NotFound, _ask_llm
 
 ALLOWED = {".pdf": "PDF", ".txt": "TXT"}
 # Up to this many tokens, the topic map reads the whole text; above it, each chunk's opening.
@@ -225,3 +232,45 @@ def topics_of(db: Session, document: Document) -> list[tuple[DocumentTopic, list
         (topic, sorted((chunks[i] for i in topic.chunk_ids if i in chunks), key=lambda c: c.chunk_index))
         for topic in topics
     ]
+
+
+def list_documents(db: Session, user: User) -> list[Document]:
+    return list(db.scalars(select(Document).where(Document.owner_id == user.id).order_by(Document.created_at.desc())))
+
+
+def expires_at(document: Document, retention_days: int) -> datetime:
+    created = document.created_at if document.created_at.tzinfo else document.created_at.replace(tzinfo=utcnow().tzinfo)
+    return created + timedelta(days=retention_days)
+
+
+def in_use(db: Session, document: Document) -> bool:
+    """True if an interview that is not finished is built on this document."""
+    sessions = db.scalars(
+        select(InterviewSession).where(
+            InterviewSession.owner_id == document.owner_id,
+            InterviewSession.input_model == InputModel.DOCUMENT,
+            InterviewSession.state != SessionState.COMPLETED,
+        )
+    )
+    return any((session.context_json or {}).get("document_id") == str(document.id) for session in sessions)
+
+
+def delete_document(db: Session, storage: FileStorage, document: Document) -> None:
+    """Delete the file, the document and (by cascade) its chunks and topics."""
+    if in_use(db, document):
+        raise Conflict("An unfinished interview uses this document. Finish or end it first.")
+    key = document.storage_key
+    db.delete(document)
+    db.commit()
+    storage.delete(key)
+
+
+def purge_expired(db: Session, storage: FileStorage, retention_days: int, now: datetime | None = None) -> int:
+    """Delete every document older than the retention period that no unfinished interview uses."""
+    now = now or utcnow()
+    deleted = 0
+    for document in db.scalars(select(Document)).all():
+        if expires_at(document, retention_days) <= now and not in_use(db, document):
+            delete_document(db, storage, document)
+            deleted += 1
+    return deleted

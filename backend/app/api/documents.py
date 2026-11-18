@@ -32,6 +32,8 @@ class DocumentView(BaseModel):
     status: DocumentStatus
     summary: dict[str, Any] | None
     created_at: datetime
+    # When the upload is deleted automatically (later if an unfinished interview still uses it).
+    expires_at: datetime
     # The latest processing job, to poll at /api/v1/jobs/{job_id}.
     job_id: uuid.UUID | None = None
 
@@ -69,6 +71,7 @@ def _view(document: Document, job: Job | None = None) -> DocumentView:
         status=document.status,
         summary=document.summary_json,
         created_at=document.created_at,
+        expires_at=svc.expires_at(document, get_settings().document_retention_days),
         job_id=job.id if job else None,
     )
 
@@ -122,7 +125,34 @@ async def upload_document(
     document = svc.upload(db, user, storage, file.filename, data, max_bytes)
     job = jobs.queue_processing(db, user, document)
     _process_later(db, job, storage, llm, background)
+    _purge_later(db, storage, background)
     return _view(document, job)
+
+
+def _purge_later(db: Session, storage: FileStorage, background: BackgroundTasks) -> None:
+    """After the response, delete uploads past their retention period."""
+    bind = db.get_bind()
+
+    def run() -> None:
+        try:
+            with Session(bind) as own:
+                svc.purge_expired(own, storage, get_settings().document_retention_days)
+        except Exception:
+            logger.exception("Deleting expired documents failed; it is tried again after the next upload.")
+
+    background.add_task(run)
+
+
+@router.get("")
+def list_documents(db: DbSession, user: CurrentUser) -> list[DocumentView]:
+    """The user's uploads, newest first."""
+    return [_view(document, jobs.latest_job(db, document)) for document in svc.list_documents(db, user)]
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(document_id: uuid.UUID, db: DbSession, user: CurrentUser, storage: Storage) -> None:
+    """Delete the uploaded file, its text and its topic map."""
+    svc.delete_document(db, storage, svc.get_document(db, user, document_id))
 
 
 @router.get("/{document_id}")
