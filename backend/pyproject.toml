@@ -22,6 +22,9 @@ dependencies = [
     "alembic~=1.20",
     # File uploads (FastAPI's UploadFile).
     "python-multipart~=0.0.34",
+    # PDF text per page. Licensed AGPL-3.0 (or commercial), which constrains
+    # the project's own licence choice.
+    "pymupdf~=2.1",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +37,12 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # PyMuPDF's SWIG bindings warn on import under Python 3.13; harmless, and an
+    # error here would crash the import.
+    "ignore:builtin type (SwigPyPacked|SwigPyObject|swigvarlink) has no __module__ attribute:DeprecationWarning",
+]
 # Real-model checks are slow, so they only run when asked: pytest -m ollama
 addopts = "-m 'not ollama'"
 markers = [
