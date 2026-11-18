@@ -31,7 +31,9 @@ class DocumentChunk(IdMixin, Base):
         ForeignKey("documents.id", ondelete="CASCADE"), index=True
     )
     chunk_index: Mapped[int] = mapped_column(Integer)
+    # The pages the chunk spans (None for an unpaged TXT file).
     page: Mapped[int | None] = mapped_column(Integer)
+    page_end: Mapped[int | None] = mapped_column(Integer)
     text: Mapped[str] = mapped_column(Text)
 
 

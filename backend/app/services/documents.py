@@ -16,12 +16,13 @@ import re
 import uuid
 from pathlib import PurePath
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.storage import FileStorage
-from app.models import Document, User
+from app.models import Document, DocumentChunk, User
 from app.models.enums import DocumentStatus
+from app.services.chunking import Chunk
 from app.services.interview import InvalidInput, NotFound
 
 ALLOWED = {".pdf": "PDF", ".txt": "TXT"}
@@ -90,3 +91,17 @@ def get_document(db: Session, user: User, document_id: uuid.UUID) -> Document:
     if document is None:
         raise NotFound("Document not found.")
     return document
+
+
+def save_chunks(db: Session, document: Document, chunks: list[Chunk]) -> list[DocumentChunk]:
+    """Replace the document's chunks with `chunks`, in order."""
+    db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    rows = [
+        DocumentChunk(
+            document_id=document.id, chunk_index=chunk.index, page=chunk.page, page_end=chunk.page_end, text=chunk.text
+        )
+        for chunk in chunks
+    ]
+    db.add_all(rows)
+    db.commit()
+    return rows
