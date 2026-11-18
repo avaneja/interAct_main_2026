@@ -12,8 +12,9 @@ Rules enforced here (README 2.2):
   look the same as missing ones.
 - Processing extracts the text, splits it into chunks and maps it into
   topics. Every topic cites only chunks that exist: ids the model invents
-  are dropped, and a topic left without chunks is dropped (in a one-chunk
-  document, it cites that chunk). A document that
+  are dropped. A topic left without chunks cites the chunks that clearly
+  match its name and summary (BM25), or its only chunk in a one-chunk
+  document; with no clear match it is dropped. A document that
   cannot be read or mapped is marked FAILED with the reason, and nothing
   partial is used.
 - Small documents are mapped from their whole text; longer ones from the
@@ -35,6 +36,7 @@ from app.schemas import TopicMap
 from app.services import prompts
 from app.services.chunking import Chunk, chunk_pages, estimate_tokens
 from app.services.extraction import ExtractionError, extract
+from app.services.retrieval import strong_matches
 from app.services.interview import InvalidInput, LLMUnavailable, NotFound, _ask_llm
 
 ALLOWED = {".pdf": "PDF", ".txt": "TXT"}
@@ -152,6 +154,10 @@ def map_topics(db: Session, llm: LLMClient, document: Document, chunks: list[Doc
             if not topic.chunk_ids and len(ids) == 1:
                 # A one-chunk document: its only chunk is where every topic comes from.
                 topic.chunk_ids = list(ids)
+            elif not topic.chunk_ids:
+                # The model cited chunks that do not exist: find the ones that clearly match the topic instead.
+                matches = strong_matches(f"{topic.name} {topic.summary or ''}", chunks)
+                topic.chunk_ids = [f"c{chunk.chunk_index}" for chunk in matches]
             if topic.chunk_ids and topic.name.casefold() not in seen:
                 seen.add(topic.name.casefold())
                 kept.append(topic)
