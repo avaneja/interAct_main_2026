@@ -1,7 +1,16 @@
 import { useEffect, useRef } from 'react'
 
 /** The candidate's own camera tile, mirrored like a video call. The video stays in the browser. */
-export default function SelfView({ stream, name }: { stream: MediaStream | null; name: string }) {
+export default function SelfView({
+  stream,
+  name,
+  trackingEyes = false,
+}: {
+  stream: MediaStream | null
+  name: string
+  /** Eye contact is being estimated, so the candidate can see that it is on. */
+  trackingEyes?: boolean
+}) {
   const video = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
@@ -28,6 +37,11 @@ export default function SelfView({ stream, name }: { stream: MediaStream | null;
         </div>
       )}
       <p className="absolute bottom-3 left-3 rounded-md bg-slate-950/70 px-2 py-1 text-xs font-medium text-white">You</p>
+      {stream && trackingEyes && (
+        <p className="absolute right-3 top-3 rounded-md bg-slate-950/70 px-2 py-1 text-xs font-medium text-emerald-300">
+          Eye contact tracking on
+        </p>
+      )}
     </div>
   )
 }

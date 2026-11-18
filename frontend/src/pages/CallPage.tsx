@@ -151,6 +151,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const focus = useRef<FocusTracker | null>(null)
   const gaze = useRef<Gaze | null>(null)
   const [trackingFocus, setTrackingFocus] = useState(false)
+  const [trackingEyes, setTrackingEyes] = useState(false)
   const answerStartedAt = useRef(0)
   const speakQueue = useRef(Promise.resolve())
 
@@ -241,6 +242,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
         if (!current) return ready.stop()
         started = ready
         gaze.current = ready
+        setTrackingEyes(true)
       },
       () => undefined,
     )
@@ -248,6 +250,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
       current = false
       started?.stop()
       gaze.current = null
+      setTrackingEyes(false)
     }
   }, [trackingFocus, cameraStream, inCall])
 
@@ -654,7 +657,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
       fullScreen={fullScreen.fullScreen}
       onToggleFullScreen={() => void fullScreen.toggle()}
       interviewer={<Interviewer interviewer={preset} ref={interviewer} onStatusChange={setInterviewerStatus} />}
-      self={<SelfView stream={camera.status === 'on' ? camera.stream : null} name={displayName} />}
+      self={<SelfView stream={camera.status === 'on' ? camera.stream : null} name={displayName} trackingEyes={trackingEyes} />}
       panel={panel}
       activity={activity}
       caption={caption}

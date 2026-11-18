@@ -38,6 +38,9 @@ test('with consent, answers carry focus numbers only, and the report shows them'
   await page.getByRole('button', { name: 'Send answer' }).click()
   await expect(page.getByText('Question 1 of 5', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Send answer' })).toBeVisible()
+  // Wait until the face model is running, so the answer has camera time behind it.
+  await expect(page.getByText('Eye contact tracking on')).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: 'Send answer' })).toBeVisible()
   await page.waitForTimeout(4000)
   await page.getByLabel('Your answer').fill('An index is a sorted structure that speeds up lookups, um, like a B-tree.')
   await page.getByRole('button', { name: 'Send answer' }).click()

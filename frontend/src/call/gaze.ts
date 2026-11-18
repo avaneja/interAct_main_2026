@@ -121,6 +121,9 @@ export async function startGaze(stream: MediaStream): Promise<Gaze> {
   video.playsInline = true
   video.srcObject = stream
   await video.play().catch(() => undefined)
+  // The first detection is slow while the model warms up (seconds on software graphics),
+  // so it happens now, while loading, and never in the middle of an answer.
+  if (video.readyState >= 2) landmarker.detectForVideo(video, performance.now())
 
   let meter = new GazeMeter()
   let last = performance.now()
