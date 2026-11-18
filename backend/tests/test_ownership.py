@@ -187,3 +187,8 @@ def test_another_user_cannot_see_your_document(ada, bob, tmp_path):
     assert ada.get(f"/api/v1/documents/{document_id}").status_code == 200
     assert theirs.status_code == 404
     assert theirs.json() == missing.json()
+    for method, path in (("GET", f"/api/v1/documents/{document_id}/summary"),
+                         ("POST", f"/api/v1/documents/{document_id}/process"),
+                         ("GET", f"/api/v1/jobs/{upload.json()['job_id']}")):
+        assert bob.request(method, path).status_code == 404, path
+    app.dependency_overrides.pop(get_storage, None)

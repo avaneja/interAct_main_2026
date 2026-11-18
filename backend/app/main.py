@@ -13,6 +13,7 @@ add_session_cookie(app, get_settings())
 app.include_router(auth.router)
 app.include_router(sessions.router)
 app.include_router(documents.router)
+app.include_router(documents.jobs_router)
 
 ERROR_STATUS = {
     interview.NotFound: status.HTTP_404_NOT_FOUND,
