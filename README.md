@@ -77,6 +77,8 @@ flowchart TD
 
 **Preparation chat rules:** Limit to approximately 2–4 useful clarifications; avoid repeated questions; permit edits to the proposed scope; never begin the interview without explicit user confirmation. The preparation LLM acts as a planner, not the interviewer.
 
+**As built (M8):** the planner (prompt `prepare-v1`) asks for what is missing in a fixed order: goal, then level, then areas to focus on. The code enforces the rules: at most four questions; a question too close to an earlier one ends the questions; none once goal, level and areas are known; areas are asked about if the model forgets. The summary is written from the draft context in code, so it states exactly what will be planned. The draft is saved on the session after every turn, which stays `PREPARING` until `PUT /context` confirms the (possibly edited) scope. The form is kept as an alternative.
+
 ### 2.2 Model B — Document-based interview
 
 **Supported formats:** The MVP supports text-based PDF and TXT. DOCX and PPTX are future extensions. Scanned PDFs require OCR and are rejected in the MVP with a clear message.
@@ -382,7 +384,8 @@ Keep **fixed-question mode** available internally for controlled research compar
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `POST` | `/api/v1/sessions` | Create draft session for `TOPIC` or `DOCUMENT` |
-| `POST` | `/api/v1/sessions/{id}/prepare/message` | Exchange Model A clarification messages |
+| `POST` | `/api/v1/sessions/{id}/prepare/message` | Exchange Model A clarification messages: the request, a reply, a skip, or "enough" |
+| `GET` | `/api/v1/sessions/{id}/prepare` | The clarification chat so far and the draft scope |
 | `POST` | `/api/v1/documents` | Upload and validate a document |
 | `GET` | `/api/v1/documents/{id}/summary` | Return extracted topics and source summary |
 | `PUT` | `/api/v1/sessions/{id}/context` | Update/confirm prepared scope |
@@ -419,7 +422,7 @@ All session/document/job endpoints must authorize access to the resource owner. 
 | `document_chunks` | id, document_id, text, page/slide/section reference, chunk_index |
 | `document_topics` | id, document_id, name, summary, chunk_ids |
 | `sessions` | id, owner_id, input_model, state, context_json, config_json, created_at |
-| `preparation_messages` | id, session_id, role, content, created_at |
+| `preparation_messages` | id, session_id, position, role, kind (request, reply, skip, question, summary), content, created_at |
 | `rubrics` | id, version, name, criteria_json, max_score, created_at |
 | `questions` | id, session_id, sequence, type, competency, prompt, rubric_id, source_chunk_ids, supporting_quote, answer_key_json, grounding_status |
 | `answers` | id, question_id (unique), session_id, text, submitted_at |
@@ -479,7 +482,7 @@ Originally planned as 15 days (about 30–60 hours). Each milestone ends with pa
 | **M5** | Call-style interview with voice: pre-call check, call screen, 3D interviewer (TalkingHead) speaking each question (HeadTTS), spoken answers with live captions and a typed fallback | A full Model A interview held as a spoken call in Chrome |
 | **M6** | Conversational interviewer: a reaction to every answer, up to two follow-ups per question, polite refusal of requests for the answer or a score, warm-up and closing, concrete subtopics for vague topics, scoring at the end of the interview (each question with its follow-ups), the next question written while the candidate answers | The call follows a real interview's shape, and no answer waits for scoring |
 | **M7** | Camera and focus: consent, camera tile, eye contact and face visibility (MediaPipe), tab-switch and full-screen detection, speaking pace and filler words, **Delivery and focus** report section | The report shows focus and delivery metrics; no media leaves the browser |
-| **M8** | Model A clarification conversation, held by the interviewer before the call's first question | Skippable 2–4 question clarification produces a confirmed context |
+| **M8** | Model A clarification conversation with the interviewer before the settings: the candidate describes the interview in their own words, the interviewer asks only what is missing (read aloud, answered by voice or typing), then the candidate edits and confirms the plan | Skippable 2–4 question clarification produces a confirmed context |
 | **M9** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
 | **M10** | Adaptive question selection (on top of the M6 follow-ups), choice of preset interviewer, deployment (managed PostgreSQL + hosted LLM mode) | Deployed demo with fixed and adaptive modes |
 
@@ -585,7 +588,7 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** M0–M4 are implemented: the backend and interview engine, local LLM questions and scoring, the typed interview flow in the browser, and Google/GitHub sign-in. On 2026-11-14 the scope changed to a call-style interview (§9, M5 onward); the deployed demo and benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** M0–M8 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, and the Model A clarification chat. Model B documents (M9), adaptive mode and deployment (M10), and the benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
 
 
