@@ -34,6 +34,8 @@ class DocumentChunk(IdMixin, Base):
     # The pages the chunk spans (None for an unpaged TXT file).
     page: Mapped[int | None] = mapped_column(Integer)
     page_end: Mapped[int | None] = mapped_column(Integer)
+    # [[offset, page], ...]: where each page starts in the text (see chunking.page_segments).
+    page_starts: Mapped[list[list[int]] | None] = mapped_column(JSONType)
     text: Mapped[str] = mapped_column(Text)
 
 

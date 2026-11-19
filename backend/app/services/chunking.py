@@ -30,6 +30,8 @@ class Chunk:
     page: int | None
     page_end: int | None
     text: str
+    # Where each page starts in `text`, as [offset, page] pairs, so a quote or topic can be placed on its page.
+    page_starts: tuple[tuple[int, int], ...] = ()
 
     @property
     def tokens(self) -> int:
@@ -58,7 +60,13 @@ def _pieces(pages: list[Page]) -> list[_Piece]:
 
 
 def _chunk(index: int, pieces: list[_Piece]) -> Chunk:
-    return Chunk(index, pieces[0].page, pieces[-1].page, " ".join(piece.text for piece in pieces))
+    starts: list[tuple[int, int]] = []
+    offset = 0
+    for piece in pieces:
+        if piece.page is not None and (not starts or starts[-1][1] != piece.page):
+            starts.append((offset, piece.page))
+        offset += len(piece.text) + 1
+    return Chunk(index, pieces[0].page, pieces[-1].page, " ".join(piece.text for piece in pieces), tuple(starts))
 
 
 def chunk_pages(pages: list[Page]) -> list[Chunk]:

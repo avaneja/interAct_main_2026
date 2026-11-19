@@ -340,3 +340,23 @@ def test_topic_answers_keep_the_usual_evaluator(db, user, llm):
     purposes = {r.purpose for r in llm.requests}
     assert "evaluate_answer" in purposes and "evaluate_document_answer" not in purposes
     assert "document_points" not in svc.get_report(db, user, session.id).summary_json["questions"][0]
+
+
+def test_the_report_places_a_verified_quote_on_its_own_page(db, user, tmp_path, llm):
+    import pymupdf
+
+    pdf = pymupdf.open()
+    for text in (FOLDS * 6, METRICS * 6, SPLITS * 6):
+        pdf.new_page().insert_textbox(pymupdf.Rect(40, 40, 560, 800), text, fontsize=10)
+    storage = FileStorage(tmp_path)
+    document = documents.upload(db, user, storage, "short.pdf", pdf.tobytes(), 10 * 2**20)
+    documents.process(db, document, storage, llm)
+    session = document_session(db, user, document)
+    llm.queue_for("generate_document_question", reply("c0", METRICS.strip()))
+    question = svc.start(db, user, session.id, llm)
+    svc.submit_answer(db, user, session.id, question.id, ANSWER, llm)
+    svc.finish(db, user, session.id, llm)
+
+    sources = svc.get_report(db, user, session.id).summary_json["questions"][0]["grounding"]["sources"]
+
+    assert sources == [{"page": 2, "page_end": 2}]

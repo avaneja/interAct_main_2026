@@ -15,7 +15,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Answer, DocumentChunk, Evaluation, InterviewSession, Question
 from app.models.enums import GroundingStatus, StyleStatus
+from app.services.pages import page_segments
 from app.services.delivery import summarise
+from app.services.grounding import quote_in
 
 LABEL = "Rubric-based practice estimate"
 REVISE_BELOW_PERCENT = 60
@@ -35,7 +37,17 @@ def _sources(db: Session, question: Question) -> list[dict[str, Any]]:
     sources = []
     for chunk_id in question.source_chunk_ids:
         chunk = db.get(DocumentChunk, uuid.UUID(chunk_id))
-        if chunk is not None:
+        if chunk is None:
+            continue
+        # The page holding the verified quote, when the chunk knows its page breaks; else the chunk's span.
+        on_page = [
+            page
+            for page, text in page_segments(chunk.text, chunk.page_starts)
+            if page is not None and question.supporting_quote and quote_in(question.supporting_quote, text)
+        ]
+        if on_page:
+            sources.append({"page": on_page[0], "page_end": on_page[0]})
+        else:
             sources.append({"page": chunk.page, "page_end": chunk.page_end})
     return sources
 

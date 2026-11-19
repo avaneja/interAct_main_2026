@@ -28,6 +28,7 @@ Rules enforced here (README 2.2):
 
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import PurePath
 
@@ -42,8 +43,9 @@ from app.models.enums import DocumentStatus, InputModel, SessionState
 from app.schemas import TopicMap
 from app.services import prompts
 from app.services.chunking import Chunk, chunk_pages, estimate_tokens
+from app.services.pages import page_segments
 from app.services.extraction import ExtractionError, extract
-from app.services.retrieval import strong_matches
+from app.services.retrieval import bm25, strong_matches
 from app.services.interview import Conflict, InvalidInput, LLMUnavailable, NotFound, _ask_llm
 
 ALLOWED = {".pdf": "PDF", ".txt": "TXT"}
@@ -123,7 +125,12 @@ def save_chunks(db: Session, document: Document, chunks: list[Chunk]) -> list[Do
     db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
     rows = [
         DocumentChunk(
-            document_id=document.id, chunk_index=chunk.index, page=chunk.page, page_end=chunk.page_end, text=chunk.text
+            document_id=document.id,
+            chunk_index=chunk.index,
+            page=chunk.page,
+            page_end=chunk.page_end,
+            page_starts=[list(start) for start in chunk.page_starts] or None,
+            text=chunk.text,
         )
         for chunk in chunks
     ]
@@ -274,3 +281,29 @@ def purge_expired(db: Session, storage: FileStorage, retention_days: int, now: d
             delete_document(db, storage, document)
             deleted += 1
     return deleted
+
+
+@dataclass(frozen=True)
+class _Segment:
+    page: int | None
+    text: str
+
+
+def topic_pages(topic: DocumentTopic, chunks: list[DocumentChunk]) -> list[int]:
+    """The pages a topic is on: within its chunks, the pages that clearly match its name and summary;
+    all their pages when no page stands out."""
+    segments = [
+        _Segment(page, text) for chunk in chunks for page, text in page_segments(chunk.text, chunk.page_starts)
+    ]
+    numbered = [segment for segment in segments if segment.page is not None]
+    span = sorted(
+        {page for chunk in chunks if chunk.page is not None for page in range(chunk.page, (chunk.page_end or chunk.page) + 1)}
+    )
+    if len({segment.page for segment in numbered}) <= 1:
+        return span
+    query = f"{topic.name} {topic.summary or ''}"
+    ranked = bm25(query, numbered)
+    best = ranked[0][1] if ranked else 0
+    if best < 1.0:
+        return span
+    return sorted({segment.page for segment, score in ranked if score >= 0.6 * best})

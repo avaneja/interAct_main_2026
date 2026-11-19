@@ -177,3 +177,29 @@ def test_the_summary_endpoint_lists_topics_with_their_pages(client, fake_llm, db
     first = body["topics"][0]
     assert first["pages"][0] == 1 and first["chunks"] >= 1
     app.dependency_overrides.pop(get_storage, None)
+
+
+SECTIONS = {
+    1: "Overfitting happens when a model memorises noise in the training data. " * 6,
+    2: "Cross-validation divides the data into folds and holds each fold out once. " * 6,
+    3: "Precision is the share of predicted positives that are truly positive. " * 6,
+}
+
+
+def test_topics_in_a_one_chunk_document_show_their_own_pages(client, fake_llm, tmp_path):
+    from app.core.storage import get_storage
+    from app.main import app
+
+    files = FileStorage(tmp_path / "uploads")
+    app.dependency_overrides[get_storage] = lambda: files
+    fake_llm.queue_for("map_topics", topic_reply(
+        ("Cross-validation folds", ["c0"]), ("Precision", ["c0"]), ("Course logistics", ["c0"])))
+    document_id = client.post("/api/v1/documents", files={"file": ("notes.pdf", pdf_bytes(list(SECTIONS.values())))}).json()["id"]
+
+    topics = {t["name"]: t["pages"] for t in client.get(f"/api/v1/documents/{document_id}/summary").json()["topics"]}
+
+    assert topics["Cross-validation folds"] == [2]
+    assert topics["Precision"] == [3]
+    # A topic no single page stands out for keeps the chunk's whole span.
+    assert topics["Course logistics"] == [1, 2, 3]
+    app.dependency_overrides.pop(get_storage, None)

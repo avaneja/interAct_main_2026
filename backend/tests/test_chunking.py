@@ -107,3 +107,26 @@ def test_chunks_are_saved_in_order_with_their_pages(db_engine, db_session):
     rows = db_session.scalars(select(DocumentChunk).order_by(DocumentChunk.chunk_index)).all()
     assert [(row.chunk_index, row.page, row.page_end, row.text) for row in rows] == [
         (chunk.index, chunk.page, chunk.page_end, chunk.text) for chunk in chunks]
+
+
+def test_each_chunk_knows_where_its_pages_start():
+    from app.services.pages import page_segments
+
+    pages = [Page(number, sentences(number, 12)) for number in range(1, 7)]
+
+    chunks = chunk_pages(pages)
+
+    for chunk in chunks:
+        segments = page_segments(chunk.text, chunk.page_starts)
+        assert [page for page, _ in segments] == list(range(chunk.page, chunk.page_end + 1))
+        for page, text in segments:
+            assert f"on page {page} " in text
+            assert not any(f"on page {other} " in text for other in range(1, 7) if other != page)
+
+
+def test_text_without_page_numbers_is_one_segment():
+    from app.services.pages import page_segments
+
+    chunk = chunk_pages([Page(None, "Bias and variance. " * 30)])[0]
+    assert chunk.page_starts == ()
+    assert page_segments(chunk.text, chunk.page_starts) == [(None, chunk.text)]

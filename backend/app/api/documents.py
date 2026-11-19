@@ -181,7 +181,7 @@ def get_summary(document_id: uuid.UUID, db: DbSession, user: CurrentUser) -> Doc
             id=topic.id,
             name=topic.name,
             summary=topic.summary,
-            pages=sorted({page for chunk in chunks for page in (chunk.page, chunk.page_end) if page is not None}),
+            pages=svc.topic_pages(topic, chunks),
             chunks=len(chunks),
         )
         for topic, chunks in svc.topics_of(db, document)
