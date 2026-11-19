@@ -59,10 +59,9 @@ describe('the call stage', () => {
     expect(mounts).toEqual({ interviewer: 1, self: 1 })
   })
 
-  it('shows what the interviewer is doing and the live caption', () => {
-    render(stage({ activity: 'speaking', caption: { who: 'interviewer', text: 'What is a process?' } }))
+  it('shows the live caption under the tiles', () => {
+    render(stage({ caption: { who: 'interviewer', text: 'What is a process?' } }))
 
-    expect(screen.getByRole('status')).toHaveTextContent('Speaking')
     expect(screen.getByText('What is a process?')).toBeInTheDocument()
     expect(screen.getByText('Interviewer:')).toBeInTheDocument()
   })

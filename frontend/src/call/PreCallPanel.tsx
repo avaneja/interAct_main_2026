@@ -105,7 +105,7 @@ function VoiceCheck({ name, voice, usingBrowserVoice }: { name: string; voice: V
     return (
       <CheckRow label={`${name}'s voice`} tone="ok">
         {voice.status === 'failed' ? `${name}'s natural voice could not start in this browser, so ` : ''}
-        your browser's built-in voice will speak, without lip-sync.
+        your browser's built-in voice will speak instead.
       </CheckRow>
     )
   }

@@ -1,6 +1,5 @@
-import type { SpeechAudio } from '@met4citizen/talkinghead'
 import { describe, expect, it, vi } from 'vitest'
-import { loadVoice, WARM_UP_TEXT, type HeadTTSModule } from './voice'
+import { loadVoice, WARM_UP_TEXT, type HeadTTSModule, type SpeechAudio } from './voice'
 
 function speech(text: string): SpeechAudio {
   return { audio: {} as AudioBuffer, words: text.split(' '), wtimes: [0], wdurations: [100] }

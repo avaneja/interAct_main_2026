@@ -7,7 +7,7 @@ import AnswerPanel from '../call/AnswerPanel'
 import CallStage, { CallTimer, type Caption } from '../call/CallStage'
 import { startFocusTracker, type FocusTracker } from '../call/focusTracker'
 import { startGaze, type Gaze } from '../call/gaze'
-import Interviewer, { type InterviewerHandle, type InterviewerStatus } from '../call/Interviewer'
+import InterviewerTile from '../call/InterviewerTile'
 import { DEFAULT_INTERVIEWER } from '../call/interviewers'
 import PreCallPanel, { type AnswerMode } from '../call/PreCallPanel'
 import { canRecognizeSpeech } from '../call/recognition'
@@ -25,10 +25,10 @@ import {
   welcomeBackLine,
 } from '../call/script'
 import SelfView from '../call/SelfView'
-import { avatarSpeaker, browserSpeaker, canUseBrowserVoice, captionSpeaker, type Speaker } from '../call/speaker'
+import { browserSpeaker, canUseBrowserVoice, captionSpeaker, unlockAudio, voiceSpeaker, type Speaker } from '../call/speaker'
 import { useCamera } from '../call/useCamera'
 import { useFullScreen } from '../call/useFullScreen'
-import { useVoice, type VoiceState } from '../call/useVoice'
+import { useVoice } from '../call/useVoice'
 import type { Voice } from '../call/voice'
 import { Alert, Button, Card } from '../components/ui'
 import WaitingNotice from '../components/WaitingNotice'
@@ -138,12 +138,10 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const [confirmEnd, setConfirmEnd] = useState(false)
   const [busy, setBusy] = useState(false)
   const [waitStartedAt, setWaitStartedAt] = useState(0)
-  const [interviewerStatus, setInterviewerStatus] = useState<InterviewerStatus>('loading')
   const [usingBrowserVoice, setUsingBrowserVoice] = useState(CAPTIONS_ONLY)
 
   const voice = useVoice(CAPTIONS_ONLY ? 'none' : preset.voice, CAPTIONS_ONLY ? NO_VOICE : undefined)
   const { camera, turnOn: cameraOn, turnOff: cameraOff } = useCamera()
-  const interviewer = useRef<InterviewerHandle>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const fullScreen = useFullScreen(stageRef)
   const alive = useRef(true)
@@ -155,13 +153,13 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   const answerStartedAt = useRef(0)
   const speakQueue = useRef(Promise.resolve())
 
-  // The speaker is chosen when it is needed: the neural voice with lip-sync when both it and the
-  // 3D interviewer are ready, otherwise the browser's voice, otherwise captions only.
+  // The speaker is chosen when it is needed: the neural voice when it is ready, otherwise the
+  // browser's voice, otherwise captions only.
   const speakerRef = useRef<Speaker | null>(null)
   const chooseSpeaker = (): Speaker => {
     if (!speakerRef.current) {
-      if (!usingBrowserVoice && voice.status === 'ready' && interviewerStatus === 'ready') {
-        speakerRef.current = avatarSpeaker(voice.voice, () => interviewer.current)
+      if (!usingBrowserVoice && voice.status === 'ready') {
+        speakerRef.current = voiceSpeaker(voice.voice)
       } else if (!CAPTIONS_ONLY && canUseBrowserVoice()) {
         speakerRef.current = browserSpeaker()
       } else {
@@ -401,6 +399,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
   }, [readyVoice, firstPrompt, firstSequence, preset.name, firstName, total, topic, resuming])
 
   const join = async (chosen: AnswerMode, trackFocus: boolean) => {
+    // Called from the Join click, so the browser lets the interviewer's voice play.
+    unlockAudio()
     setMode(chosen)
     if (trackFocus && !focus.current) focus.current = startFocusTracker()
     setTrackingFocus(trackFocus)
@@ -475,9 +475,6 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     await finishCall()
   }
 
-  // The voice shown in the lobby also waits for the 3D interviewer, so both start together.
-  const lobbyVoice: VoiceState =
-    voice.status === 'ready' && interviewerStatus === 'loading' ? { status: 'loading', progress: null } : voice
   // Every question before the current one has been answered; in the wrap-up, all of them.
   const answered = exchange === 'closing' || inWrapUp ? total : question ? question.sequence - 1 : initialSession.questions_answered
   const activity =
@@ -496,7 +493,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
           <PreCallPanel
             interviewerName={preset.name}
             questionCount={total}
-            voice={lobbyVoice}
+            voice={voice}
             usingBrowserVoice={usingBrowserVoice}
             onUseBrowserVoice={() => setUsingBrowserVoice(true)}
             camera={camera}
@@ -656,10 +653,9 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
       stageRef={stageRef}
       fullScreen={fullScreen.fullScreen}
       onToggleFullScreen={() => void fullScreen.toggle()}
-      interviewer={<Interviewer interviewer={preset} ref={interviewer} onStatusChange={setInterviewerStatus} />}
+      interviewer={<InterviewerTile name={preset.name} activity={stage === 'lobby' ? 'idle' : activity} />}
       self={<SelfView stream={camera.status === 'on' ? camera.stream : null} name={displayName} trackingEyes={trackingEyes} />}
       panel={panel}
-      activity={activity}
       caption={caption}
       captionsOn={captionsOn}
       header={

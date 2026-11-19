@@ -1,9 +1,15 @@
-import type { SpeechAudio } from '@met4citizen/talkinghead'
+/** Audio plus word timings in milliseconds, as HeadTTS produces it. */
+export interface SpeechAudio {
+  audio: AudioBuffer
+  words: string[]
+  wtimes: number[]
+  wdurations: number[]
+}
 
 /**
  * The interviewer's voice: HeadTTS with Kokoro neural voices, running in the
  * browser (WebGPU, or the slower WASM when WebGPU is missing). It returns
- * audio with word and viseme timings, which the 3D interviewer lip-syncs.
+ * audio with word timings, played in the call with live captions.
  *
  * HeadTTS is served unchanged from /vendor/headtts/ (see vite.config.ts) and
  * loaded at runtime. Its model and voices (about 300 MB) download from Hugging

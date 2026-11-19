@@ -23,7 +23,6 @@ const spoken = vi.hoisted(() => [] as string[])
 vi.mock('../call/speaker', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../call/speaker')>()
   const instant = {
-    lipSync: false,
     prepare: () => {},
     stop: () => {},
     speak: async (text: string, onWord?: (word: string) => void) => {
@@ -33,15 +32,8 @@ vi.mock('../call/speaker', async (importOriginal) => {
   }
   return { ...actual, canUseBrowserVoice: () => false, captionSpeaker: () => instant }
 })
-// No neural voice, no 3D (jsdom has no WebGL), and no speech recognition: answers are typed.
+// No neural voice and no speech recognition: answers are typed.
 vi.mock('../call/useVoice', () => ({ useVoice: () => ({ status: 'failed' }) }))
-vi.mock('@met4citizen/talkinghead', () => ({
-  TalkingHead: class {
-    constructor() {
-      throw new Error('no WebGL')
-    }
-  },
-}))
 vi.mock('../call/recognition', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../call/recognition')>()),
   canRecognizeSpeech: () => false,

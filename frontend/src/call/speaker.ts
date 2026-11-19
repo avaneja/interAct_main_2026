@@ -1,4 +1,3 @@
-import type { InterviewerHandle } from './Interviewer'
 import type { Voice } from './voice'
 
 /** How the interviewer's lines are spoken; the call screen does not care which kind it gets. */
@@ -8,38 +7,82 @@ export interface Speaker {
   /** Start making speech for a line that will be said soon, so it plays without a pause. */
   prepare: (text: string) => void
   stop: () => void
-  /** Whether the 3D interviewer moves its lips with the speech. */
-  lipSync: boolean
 }
 
-/** The neural voice, lip-synced by the 3D interviewer. */
-export function avatarSpeaker(voice: Voice, interviewer: () => InterviewerHandle | null): Speaker {
+let sharedContext: AudioContext | null = null
+
+/** The page's audio output. Browsers only let audio start after a click, so call this from one (joining the call). */
+export function unlockAudio(): AudioContext | null {
+  if (typeof window === 'undefined' || !('AudioContext' in window)) return null
+  sharedContext ??= new AudioContext()
+  if (sharedContext.state === 'suspended') void sharedContext.resume().catch(() => undefined)
+  return sharedContext
+}
+
+/** The neural voice, played straight to the speakers, with each word passed on as it is said. */
+export function voiceSpeaker(voice: Voice, context: () => AudioContext | null = unlockAudio): Speaker {
   let turn = 0
+  let playing: AudioBufferSourceNode[] = []
+  let timers: number[] = []
+  let finish: (() => void) | null = null
+
+  const silence = () => {
+    playing.forEach((source) => {
+      try {
+        source.stop()
+      } catch {
+        // Already finished.
+      }
+    })
+    timers.forEach((timer) => window.clearTimeout(timer))
+    playing = []
+    timers = []
+    finish?.()
+    finish = null
+  }
+
   return {
-    lipSync: true,
     async speak(text, onWord) {
       const mine = ++turn
       const speech = await voice.say(text)
-      // Stopped, or another line started, while the speech was being made.
-      if (mine !== turn) return
-      await interviewer()?.speak(speech, onWord)
+      const output = context()
+      // Stopped, or another line started, while the speech was being made; or no audio output.
+      if (mine !== turn || !output) return
+      await new Promise<void>((resolve) => {
+        finish = resolve
+        let offset = 0.05
+        for (const part of speech) {
+          const source = output.createBufferSource()
+          source.buffer = part.audio
+          source.connect(output.destination)
+          source.start(output.currentTime + offset)
+          playing.push(source)
+          part.words.forEach((word, index) => {
+            const at = offset * 1000 + (part.wtimes[index] ?? 0)
+            timers.push(window.setTimeout(() => mine === turn && onWord?.(word.trim()), at))
+          })
+          offset += part.audio.duration
+        }
+        timers.push(window.setTimeout(() => {
+          if (mine === turn) silence()
+        }, offset * 1000 + 100))
+      })
     },
     prepare(text) {
       voice.say(text).catch(() => undefined)
     },
     stop() {
       turn++
-      interviewer()?.stopSpeaking()
+      silence()
     },
   }
 }
 
 const wordsIn = (text: string) => text.split(/\s+/).filter(Boolean)
 
-/** The browser's built-in voice, used when the neural voice or the 3D interviewer cannot run. */
+/** The browser's built-in voice, used when the neural voice cannot run. */
 export function browserSpeaker(synthesis: SpeechSynthesis = window.speechSynthesis): Speaker {
   return {
-    lipSync: false,
     speak(text, onWord) {
       return new Promise((resolve) => {
         // Some browsers never report the end of speech (for example with no voices installed),
@@ -81,7 +124,6 @@ export function captionSpeaker(wordsPerMinute = 180): Speaker {
   let timers: number[] = []
   const waiting = new Set<() => void>()
   return {
-    lipSync: false,
     speak(text, onWord) {
       return new Promise((resolve) => {
         const words = wordsIn(text)

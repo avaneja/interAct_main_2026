@@ -1,17 +1,13 @@
 /**
- * The preset interviewers. Each is a 3D model in public/interviewers (see
- * CREDITS.md there for sources and licenses) and a voice for HeadTTS.
+ * The interviewer: a name and a HeadTTS voice. The call shows the interviewer
+ * with the camera off, so there is no 3D model; only the voice is heard.
  */
 export interface InterviewerPreset {
   key: string
   name: string
-  modelUrl: string
-  body: 'M' | 'F'
   voice: string
 }
 
-export const INTERVIEWERS: InterviewerPreset[] = [
-  { key: 'preset-01', name: 'Maya', modelUrl: '/interviewers/maya.glb', body: 'F', voice: 'af_bella' },
-]
+export const INTERVIEWERS: InterviewerPreset[] = [{ key: 'preset-01', name: 'Maya', voice: 'af_bella' }]
 
 export const DEFAULT_INTERVIEWER = INTERVIEWERS[0]

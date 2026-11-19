@@ -7,13 +7,6 @@ export interface Caption {
   text: string
 }
 
-const ACTIVITY_LABEL: Record<InterviewerActivity, string> = {
-  speaking: 'Speaking',
-  listening: 'Listening',
-  thinking: 'Thinking…',
-  idle: '',
-}
-
 /** Minutes and seconds since the call started. */
 export function CallTimer({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(() => Date.now())
@@ -46,10 +39,10 @@ function ControlButton({
   children: ReactNode
 }) {
   const tone = danger
-    ? 'bg-red-600 text-white hover:bg-red-500'
+    ? 'bg-gradient-to-r from-rose-500 to-red-500 text-white shadow-lg shadow-rose-300/60 hover:from-rose-600 hover:to-red-600'
     : pressed === false
-      ? 'bg-red-950/80 text-red-200 hover:bg-red-900'
-      : 'bg-slate-800 text-slate-100 hover:bg-slate-700'
+      ? 'bg-rose-100 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-200'
+      : 'bg-white text-slate-800 shadow-md shadow-violet-200/50 ring-1 ring-slate-200 hover:bg-violet-50'
   return (
     <button
       type="button"
@@ -57,7 +50,7 @@ function ControlButton({
       aria-pressed={pressed}
       title={label}
       onClick={onClick}
-      className={`flex h-11 min-w-11 items-center justify-center rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${tone}`}
+      className={`flex h-11 min-w-11 items-center justify-center rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${tone}`}
     >
       {children}
     </button>
@@ -113,7 +106,6 @@ export interface CallStageProps {
   interviewer: ReactNode
   self: ReactNode
   panel: ReactNode
-  activity?: InterviewerActivity
   caption?: Caption | null
   captionsOn?: boolean
   header?: ReactNode
@@ -124,18 +116,17 @@ export interface CallStageProps {
 }
 
 /**
- * The video-call layout: the interviewer fills the stage, the candidate's
- * camera is a small tile in its corner, and the panel sits beside them (the
+ * The video-call layout: two tiles side by side, the candidate's camera and
+ * the interviewer (camera off, voice only), with the panel beside them (the
  * pre-call check in the lobby, the question and answer in the call). In the
- * call, captions, the interviewer's status and the controls are added; the
- * tiles stay mounted, so nothing reloads on joining.
+ * call, captions and the controls are added; the tiles stay mounted, so
+ * nothing reloads on joining.
  */
 export default function CallStage({
   mode,
   interviewer,
   self,
   panel,
-  activity = 'idle',
   caption = null,
   captionsOn = true,
   header,
@@ -150,25 +141,19 @@ export default function CallStage({
   return (
     <div
       ref={stageRef ?? fallbackRef}
-      className="flex flex-col gap-3 bg-slate-950 data-[full]:h-screen data-[full]:p-4"
+      className="flex flex-col gap-4 data-[full]:h-screen data-[full]:overflow-auto data-[full]:bg-[#fffbf7] data-[full]:p-4"
       data-full={fullScreen || undefined}
     >
       {inCall && header}
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="relative aspect-video w-full lg:aspect-auto lg:h-[min(70vh,40rem)]">
-          <div className="h-full w-full">{interviewer}</div>
-          <div className="absolute right-3 top-3 aspect-video w-32 shadow-lg sm:w-48">{self}</div>
-          {inCall && activity !== 'idle' && (
-            <p className="absolute left-3 top-3 rounded-full bg-slate-950/70 px-3 py-1 text-xs font-medium text-white" role="status">
-              {ACTIVITY_LABEL[activity]}
-            </p>
-          )}
+        <div className="flex min-h-0 flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="aspect-video sm:aspect-auto sm:h-[min(50vh,28rem)]">{self}</div>
+            <div className="aspect-video sm:aspect-auto sm:h-[min(50vh,28rem)]">{interviewer}</div>
+          </div>
           {inCall && captionsOn && caption && caption.text && (
-            <p
-              className="absolute inset-x-3 bottom-12 mx-auto max-w-3xl rounded-lg bg-slate-950/80 px-4 py-2 text-center text-base text-white"
-              aria-live="polite"
-            >
-              <span className="mr-2 font-semibold text-violet-300">{caption.who === 'you' ? 'You' : 'Interviewer'}:</span>
+            <p className="surface mx-auto w-full max-w-3xl px-5 py-3 text-center text-base text-slate-800" aria-live="polite">
+              <span className="mr-2 font-semibold text-violet-600">{caption.who === 'you' ? 'You' : 'Interviewer'}:</span>
               {caption.text}
             </p>
           )}
