@@ -62,6 +62,10 @@ export async function loadVoice({ voice, audioContext = null, onProgress, load =
     voices: [voice],
     defaultVoice: voice,
     audioCtx: audioContext,
+    // Full precision on both backends. HeadTTS defaults WASM to 4-bit (q4), which makes the
+    // voice sound muffled; fp32 is the same model file WebGPU already downloads.
+    dtypeWebgpu: 'fp32',
+    dtypeWasm: 'fp32',
   })
   await client.connect(null, (event) => {
     if (event.lengthComputable && event.total > 0) onProgress?.(Math.min(event.loaded / event.total, 1))

@@ -1,16 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { browserSpeaker, captionSpeaker, voiceSpeaker } from './speaker'
+import { browserSpeaker, captionSpeaker, joinSpeech, voiceSpeaker } from './speaker'
 import type { SpeechAudio, Voice } from './voice'
 
-const SPEECH: SpeechAudio[] = [
-  { audio: { duration: 0.5 } as AudioBuffer, words: ['Hello ', 'there'], wtimes: [0, 250], wdurations: [200, 200] },
-]
+/** A mono buffer at `rate` Hz, filled with `value`, shaped like a Web Audio AudioBuffer. */
+function fakeBuffer(samples: number, rate = 1000, value = 1): AudioBuffer {
+  const data = new Float32Array(samples).fill(value)
+  return {
+    length: samples,
+    sampleRate: rate,
+    numberOfChannels: 1,
+    duration: samples / rate,
+    getChannelData: () => data,
+  } as unknown as AudioBuffer
+}
+
+const makeBuffer = (_channels: number, length: number, rate: number) => fakeBuffer(length, rate, 0)
+
+const SPEECH: SpeechAudio[] = [{ audio: fakeBuffer(500), words: ['Hello ', 'there'], wtimes: [0, 250], wdurations: [200, 200] }]
 
 function fakeOutput() {
   const sources: { buffer: AudioBuffer | null; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = []
   const output = {
     currentTime: 0,
+    state: 'running',
     destination: {},
+    createBuffer: makeBuffer,
     createBufferSource: () => {
       const source = { buffer: null, connect: vi.fn(), start: vi.fn(), stop: vi.fn() }
       sources.push(source)
@@ -19,6 +33,32 @@ function fakeOutput() {
   } as unknown as AudioContext
   return { output, sources }
 }
+
+describe('joining sentence clips into one smooth line', () => {
+  it('fades every edge, adds a short pause between sentences and shifts word times', () => {
+    const first = fakeBuffer(100)
+    const second = fakeBuffer(100)
+    const joined = joinSpeech({ createBuffer: makeBuffer } as unknown as AudioContext, [
+      { audio: first, words: ['One.'], wtimes: [0], wdurations: [50] },
+      { audio: second, words: ['Two.'], wtimes: [10], wdurations: [50] },
+    ])!
+    const gap = 120 // 0.12 s at 1000 Hz
+    expect(joined.audio.length).toBe(200 + gap)
+    const data = joined.audio.getChannelData(0)
+    expect(data[0]).toBe(0) // faded in, no click
+    expect(data[50]).toBe(1) // full level in the middle
+    expect(data[99]).toBe(0) // faded out
+    expect(data[100 + gap / 2]).toBe(0) // the pause is silent
+    expect(joined.words).toEqual([
+      { word: 'One.', at: 0 },
+      { word: 'Two.', at: 100 + gap + 10 },
+    ])
+  })
+
+  it('returns nothing for empty speech', () => {
+    expect(joinSpeech({ createBuffer: makeBuffer } as unknown as AudioContext, [])).toBeNull()
+  })
+})
 
 describe('speaking with the neural voice, camera off', () => {
   beforeEach(() => {
@@ -39,7 +79,7 @@ describe('speaking with the neural voice, camera off', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(voice.say).toHaveBeenCalledWith('Hello there')
     expect(sources).toHaveLength(1)
-    expect(sources[0].buffer).toBe(SPEECH[0].audio)
+    expect(sources[0].buffer?.length).toBe(500)
     expect(sources[0].start).toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(100)
@@ -187,5 +227,29 @@ describe('a browser voice that never finishes', () => {
     expect(finished).toBe(true)
     vi.unstubAllGlobals()
     vi.useRealTimers()
+  })
+})
+
+describe('the audio output', () => {
+  it('asks for playback-sized buffers, so speech does not break while the page is busy', async () => {
+    vi.resetModules()
+    const options: unknown[] = []
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        state = 'running'
+        constructor(option: unknown) {
+          options.push(option)
+        }
+      },
+    )
+    const { unlockAudio } = await import('./speaker')
+
+    const first = unlockAudio()
+    const second = unlockAudio()
+
+    expect(options).toEqual([{ latencyHint: 'playback' }])
+    expect(second).toBe(first)
+    vi.unstubAllGlobals()
   })
 })

@@ -8,6 +8,7 @@ export interface InterviewerPreset {
   voice: string
 }
 
-export const INTERVIEWERS: InterviewerPreset[] = [{ key: 'preset-01', name: 'Maya', voice: 'af_bella' }]
+// af_heart is Kokoro's highest-rated English voice: clearer and more fluent than af_bella.
+export const INTERVIEWERS: InterviewerPreset[] = [{ key: 'preset-01', name: 'Maya', voice: 'af_heart' }]
 
 export const DEFAULT_INTERVIEWER = INTERVIEWERS[0]

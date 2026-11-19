@@ -1,4 +1,4 @@
-import type { Voice } from './voice'
+import type { SpeechAudio, Voice } from './voice'
 
 /** How the interviewer's lines are spoken; the call screen does not care which kind it gets. */
 export interface Speaker {
@@ -14,9 +14,53 @@ let sharedContext: AudioContext | null = null
 /** The page's audio output. Browsers only let audio start after a click, so call this from one (joining the call). */
 export function unlockAudio(): AudioContext | null {
   if (typeof window === 'undefined' || !('AudioContext' in window)) return null
-  sharedContext ??= new AudioContext()
+  // "playback" asks for larger audio buffers: speech is not interactive, and small buffers run dry
+  // (crackles and breaks) while the page is also making the next lines and tracking the camera.
+  sharedContext ??= new AudioContext({ latencyHint: 'playback' })
   if (sharedContext.state === 'suspended') void sharedContext.resume().catch(() => undefined)
   return sharedContext
+}
+
+// HeadTTS returns a line as one clip per sentence. Played back to back, the hard edges click
+// and the sentences run into each other, which sounds broken. They are joined into one clip
+// with short fades at every edge and a brief, natural pause between sentences.
+const FADE_SECONDS = 0.01
+const SENTENCE_GAP_SECONDS = 0.12
+
+export interface JoinedSpeech {
+  audio: AudioBuffer
+  /** Each word and when it starts, in milliseconds from the start of `audio`. */
+  words: { word: string; at: number }[]
+}
+
+/** Join a line's sentence clips into one smooth clip. */
+export function joinSpeech(output: Pick<AudioContext, 'createBuffer'>, speech: SpeechAudio[]): JoinedSpeech | null {
+  const parts = speech.filter((part) => part.audio && part.audio.length > 0)
+  if (parts.length === 0) return null
+  const rate = parts[0].audio.sampleRate
+  const channels = Math.max(...parts.map((part) => part.audio.numberOfChannels))
+  const gap = Math.round(SENTENCE_GAP_SECONDS * rate)
+  const length = parts.reduce((sum, part) => sum + part.audio.length, 0) + gap * (parts.length - 1)
+  const audio = output.createBuffer(channels, length, rate)
+  const fade = Math.max(1, Math.round(FADE_SECONDS * rate))
+  const words: JoinedSpeech['words'] = []
+
+  let offset = 0
+  for (const part of parts) {
+    for (let channel = 0; channel < channels; channel++) {
+      const source = part.audio.getChannelData(Math.min(channel, part.audio.numberOfChannels - 1))
+      const target = audio.getChannelData(channel)
+      const n = source.length
+      for (let i = 0; i < n; i++) {
+        const edge = Math.min(i, n - 1 - i)
+        target[offset + i] = edge < fade ? source[i] * (edge / fade) : source[i]
+      }
+    }
+    const startMs = (offset / rate) * 1000
+    part.words.forEach((word, index) => words.push({ word: word.trim(), at: startMs + (part.wtimes[index] ?? 0) }))
+    offset += part.audio.length + gap
+  }
+  return { audio, words }
 }
 
 /** The neural voice, played straight to the speakers, with each word passed on as it is said. */
@@ -48,24 +92,23 @@ export function voiceSpeaker(voice: Voice, context: () => AudioContext | null = 
       const output = context()
       // Stopped, or another line started, while the speech was being made; or no audio output.
       if (mine !== turn || !output) return
+      const line = joinSpeech(output, speech)
+      if (!line) return
+      if (output.state === 'suspended') await output.resume().catch(() => undefined)
       await new Promise<void>((resolve) => {
         finish = resolve
-        let offset = 0.05
-        for (const part of speech) {
-          const source = output.createBufferSource()
-          source.buffer = part.audio
-          source.connect(output.destination)
-          source.start(output.currentTime + offset)
-          playing.push(source)
-          part.words.forEach((word, index) => {
-            const at = offset * 1000 + (part.wtimes[index] ?? 0)
-            timers.push(window.setTimeout(() => mine === turn && onWord?.(word.trim()), at))
-          })
-          offset += part.audio.duration
-        }
+        const lead = 0.05
+        const source = output.createBufferSource()
+        source.buffer = line.audio
+        source.connect(output.destination)
+        source.start(output.currentTime + lead)
+        playing.push(source)
+        line.words.forEach(({ word, at }) => {
+          timers.push(window.setTimeout(() => mine === turn && onWord?.(word), lead * 1000 + at))
+        })
         timers.push(window.setTimeout(() => {
           if (mine === turn) silence()
-        }, offset * 1000 + 100))
+        }, (lead + line.audio.duration) * 1000 + 100))
       })
     },
     prepare(text) {
