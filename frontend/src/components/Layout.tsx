@@ -4,8 +4,8 @@ import AuthProvider from '../auth/AuthProvider'
 import { useAuth } from '../auth/context'
 
 const navClass = ({ isActive }: { isActive: boolean }) =>
-  `rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-    isActive ? 'bg-slate-800 text-white' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+  `rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+    isActive ? 'bg-brand text-white shadow-md shadow-fuchsia-200' : 'text-slate-600 hover:bg-white hover:text-slate-900'
   }`
 
 function Account() {
@@ -36,20 +36,20 @@ function Account() {
 
   const { user } = state
   return (
-    <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
-      <span className="max-w-40 truncate text-sm text-slate-300" title={user.email ?? undefined}>
+    <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+      <span className="max-w-40 truncate text-sm font-medium text-slate-700" title={user.email ?? undefined}>
         {user.display_name || user.email || 'Signed in'}
       </span>
       <button
         type="button"
         onClick={handleSignOut}
         disabled={busy}
-        className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-slate-800/60 hover:text-white disabled:text-slate-500"
+        className="rounded-full px-4 py-1.5 text-sm font-semibold text-slate-600 hover:bg-white hover:text-slate-900 disabled:text-slate-400"
       >
         Sign out
       </button>
       {failed && (
-        <span role="alert" className="text-xs text-red-300">
+        <span role="alert" className="text-xs font-medium text-rose-600">
           Could not sign out. Try again.
         </span>
       )}
@@ -62,11 +62,14 @@ export default function Layout() {
   const wide = useMatch('/sessions/:id/interview') !== null
   return (
     <AuthProvider>
-      <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
-        <header className="border-b border-slate-800">
-          <nav className={`mx-auto flex ${wide ? 'max-w-6xl' : 'max-w-4xl'} flex-wrap items-center justify-between gap-4 px-4 py-3`}>
-            <Link to="/" className="text-lg font-bold tracking-tight text-white">
-              InterAct
+      <div className="flex min-h-screen flex-col text-slate-900">
+        <header className="sticky top-0 z-10 border-b border-white/70 bg-white/70 backdrop-blur">
+          <nav className={`mx-auto flex ${wide ? 'max-w-6xl' : 'max-w-5xl'} flex-wrap items-center justify-between gap-4 px-4 py-3`}>
+            <Link to="/" className="flex items-center gap-2 text-xl font-extrabold tracking-tight">
+              <span className="bg-brand flex h-8 w-8 items-center justify-center rounded-xl text-sm text-white shadow-md shadow-fuchsia-200" aria-hidden>
+                iA
+              </span>
+              <span className="text-brand">InterAct</span>
             </Link>
             <div className="flex flex-wrap items-center gap-1">
               <NavLink to="/new" className={navClass}>
@@ -79,7 +82,7 @@ export default function Layout() {
             </div>
           </nav>
         </header>
-        <main className={`mx-auto w-full flex-1 px-4 py-8 ${wide ? 'max-w-6xl' : 'max-w-4xl'}`}>
+        <main className={`mx-auto w-full flex-1 px-4 py-8 ${wide ? 'max-w-6xl' : 'max-w-5xl'}`}>
           <Outlet />
         </main>
       </div>

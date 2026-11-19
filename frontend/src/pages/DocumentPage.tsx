@@ -22,7 +22,7 @@ export default function DocumentPage() {
 
 function ExistingSession({ id }: { id: string }) {
   const loaded = useLoad((signal) => api.getSession(id, signal), id)
-  if (loaded.loading) return <p className="text-slate-400">Loading…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading…</p>
   if (loaded.error || !loaded.data) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={loaded.reload}>Try again</Button>}>
@@ -52,7 +52,7 @@ function DocumentFlow({ session }: { session: SessionView | null }) {
           <UploadCard onUploaded={(document) => setDocumentId(document.id)} />
           <YourDocuments onPick={(document) => setDocumentId(document.id)} />
           <p className="text-sm">
-            <Link to="/new" className="text-slate-300 hover:text-white">
+            <Link to="/new" className="text-slate-600 hover:text-slate-900">
               Describe a topic instead
             </Link>
           </p>
@@ -99,7 +99,7 @@ function UploadCard({ onUploaded }: { onUploaded: (document: DocumentView) => vo
     <Card>
       <form className="space-y-4" onSubmit={submit} noValidate>
         <div className="space-y-1.5">
-          <label htmlFor="document" className="block text-sm font-medium text-slate-200">
+          <label htmlFor="document" className="block text-sm font-medium text-slate-700">
             Your notes
           </label>
           <input
@@ -107,9 +107,9 @@ function UploadCard({ onUploaded }: { onUploaded: (document: DocumentView) => vo
             type="file"
             accept=".pdf,.txt,application/pdf,text/plain"
             onChange={choose}
-            className="block w-full text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-2 file:text-slate-100 hover:file:bg-slate-700"
+            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-violet-100 file:px-3 file:py-2 file:text-violet-700 hover:file:bg-violet-200"
           />
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             A text-based PDF (you can select its text) or a TXT file, up to {MAX_UPLOAD_MB} MB. Scanned documents can't be read
             yet. Uploads are deleted automatically after 30 days.
           </p>
@@ -147,14 +147,14 @@ function YourDocuments({ onPick }: { onPick: (document: DocumentView) => void })
 
   return (
     <Card className="space-y-3">
-      <h2 className="font-semibold text-white">Your uploads</h2>
+      <h2 className="font-semibold text-slate-900">Your uploads</h2>
       {error && <Alert title="Could not delete">{error}</Alert>}
-      <ul className="divide-y divide-slate-800" aria-label="Your uploads">
+      <ul className="divide-y divide-slate-100" aria-label="Your uploads">
         {documents.map((document) => (
           <li key={document.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
             <div>
-              <p className="text-sm text-slate-100">{document.filename}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-800">{document.filename}</p>
+              <p className="text-xs text-slate-400">
                 {document.status === 'READY' ? 'Ready' : document.status === 'FAILED' ? 'Could not be read' : 'Being read'} · deleted
                 on {new Date(document.expires_at).toLocaleDateString()}
               </p>
@@ -229,8 +229,8 @@ function Reading({ documentId, session, onStartOver }: { documentId: string; ses
       <Card className="flex items-center gap-3" >
         <Spinner />
         <div role="status">
-          <p className="text-slate-100">Reading {summary?.document.filename ?? 'your document'}…</p>
-          <p className="text-sm text-slate-400">Finding its topics. This can take up to a minute with a local model.</p>
+          <p className="text-slate-800">Reading {summary?.document.filename ?? 'your document'}…</p>
+          <p className="text-sm text-slate-500">Finding its topics. This can take up to a minute with a local model.</p>
         </div>
       </Card>
     )
@@ -306,27 +306,27 @@ function TopicReview({ summary, session, onStartOver }: { summary: DocumentSumma
     <Card className="space-y-5">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-lg font-semibold text-white">{document.filename}</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{document.filename}</h2>
           {document.summary?.pages ? <Badge>{document.summary.pages} pages</Badge> : null}
         </div>
-        {document.summary?.summary && <p className="mt-2 text-sm text-slate-300">{document.summary.summary}</p>}
+        {document.summary?.summary && <p className="mt-2 text-sm text-slate-600">{document.summary.summary}</p>}
       </div>
       <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-medium text-slate-200">Topics to be interviewed on</legend>
+        <legend className="mb-2 text-sm font-medium text-slate-700">Topics to be interviewed on</legend>
         {topics.map((topic) => (
-          <label key={topic.id} className="flex cursor-pointer gap-3 rounded-lg border border-slate-800 p-3 hover:border-slate-700">
+          <label key={topic.id} className="flex cursor-pointer gap-3 rounded-lg border border-slate-200 p-3 hover:border-violet-300">
             <input type="checkbox" className="mt-1" checked={chosen.has(topic.id)} onChange={() => toggle(topic.id)} />
             <span>
-              <span className="block text-sm font-medium text-slate-100">{topic.name}</span>
-              {topic.summary && <span className="block text-sm text-slate-400">{topic.summary}</span>}
-              {topic.pages.length > 0 && <span className="block text-xs text-slate-500">{pagesLabel(topic.pages)}</span>}
+              <span className="block text-sm font-medium text-slate-800">{topic.name}</span>
+              {topic.summary && <span className="block text-sm text-slate-500">{topic.summary}</span>}
+              {topic.pages.length > 0 && <span className="block text-xs text-slate-400">{pagesLabel(topic.pages)}</span>}
             </span>
           </label>
         ))}
       </fieldset>
       {error && <Alert title="Could not continue">{error}</Alert>}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button type="button" onClick={onStartOver} className="text-sm text-slate-300 hover:text-white">
+        <button type="button" onClick={onStartOver} className="text-sm text-slate-600 hover:text-slate-900">
           Use a different file
         </button>
         <Button onClick={() => void confirm()} busy={saving}>

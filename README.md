@@ -1,6 +1,6 @@
 # InterAct
 
-**An AI interview practice platform: a live, call-style interview with a 3D AI interviewer who asks questions aloud, listens to spoken answers, and gives evidence-based feedback on topic-based or document-grounded interviews.**
+**An AI interview practice platform: a live, call-style interview with an AI interviewer who asks questions aloud, listens to spoken answers, and gives evidence-based feedback on topic-based or document-grounded interviews.**
 
 > **Project status:** Planned capstone — this README is a proposed technical specification, not documentation of an already implemented system.
 >
@@ -14,7 +14,7 @@ InterAct allows a user to prepare for an interview in **exactly two ways**:
 - **Model A — Topic-Based Interview:** The user describes what they want to be interviewed on in natural language. An LLM conducts a short **pre-interview clarification conversation** to establish the topic boundaries, goals, experience level, and relevant subtopics.
 - **Model B — Document-Based Interview:** The user uploads a supported document. The platform extracts and organizes its content, then creates an interview grounded in that document. The user can review the identified topics and adjust the scope before proceeding.
 
-**The interview itself is a call.** Whichever model prepares it, the interview runs like a video call: a 3D interviewer on one side of the screen asks each question aloud with lip-synced speech, the candidate's camera is on the other side, and the candidate answers by speaking. Live captions show both sides. With the candidate's consent, the browser also tracks eye contact and tab switches during the call and reports them as practice feedback.
+**The interview itself is a call.** Whichever model prepares it, the interview runs like a video call where only the candidate's camera is on: the AI interviewer keeps its camera off and is heard, not seen, asking each question aloud, while the candidate's camera tile sits beside it and the candidate answers by speaking. Live captions show both sides. With the candidate's consent, the browser also tracks eye contact and tab switches during the call and reports them as practice feedback.
 
 **Question-style selection is not a third model.** Both models lead into the same configuration screen, where the user chooses direct, conceptual, case-based, scenario-based, application/problem-solving, or mixed questions, along with difficulty and question count. Both models then use the **same interview engine, scoring pipeline, and reporting system**.
 
@@ -147,9 +147,9 @@ Typical inputs are lecture notes or chapters (roughly 5–60 pages), so the MVP 
 ### 2.4 Live interview (call)
 
 1. **Pre-call check.** The candidate sees their camera and microphone, tests both, and gives consent for focus tracking. They can turn the camera off (no focus data is collected) or choose to type answers instead of speaking. The screen says plainly what is processed and where (see §2.4.1).
-2. **The call screen.** Like a video call: the interviewer's tile (a 3D avatar) and the candidate's camera tile, live captions, the question number, a timer, and mute, captions and end-call controls. The interview runs in full screen.
+2. **The call screen.** Like a video call: the candidate's camera tile and the interviewer's tile side by side (camera off: their initial, rings that pulse while they speak, and whether they are speaking, listening or thinking), live captions, the question number, a timer, and mute, captions and end-call controls. The interview runs in full screen.
 3. **Warm-up.** The interviewer greets the candidate by first name, says who it is and how many questions are coming, and asks them to tell it a little about themselves. Its reply picks up what they said. This is never scored.
-4. The interviewer **asks one question at a time aloud**, with lip-synced speech, and the question text stays visible in the captions. The candidate can send an answer only once the question has been asked.
+4. The interviewer **asks one question at a time aloud**, in a natural voice, and the question text stays visible in the captions. The candidate can send an answer only once the question has been asked.
 5. The candidate **answers by speaking**; the transcript appears live. They finish by pressing **Done** (or after a few seconds of silence), can correct recognition mistakes in the transcript, and send it. Typing is always available instead.
 6. **The interviewer reacts like a person.** A short listening sound plays at once ("Okay."), then the interviewer reacts in a sentence or two to what the candidate actually said, honestly and without giving the answer or a score, and either asks a **follow-up** about the same question (when the answer is vague or incomplete, or invites a deeper question; at most two per question) or leads into the next question with a short transition. Requests for the answer or a score are politely declined.
 7. The next planned question, in the **user-selected style**, is written in the background while the candidate is still answering, so moving on waits only for the interviewer's reaction.
@@ -195,7 +195,7 @@ These are estimates: lighting, glasses, and camera position affect them, and the
 ```mermaid
 flowchart TB
     UI[React + TypeScript UI] --> API[FastAPI REST API]
-    UI --> CALL[Call screen in the browser: 3D interviewer, text-to-speech, speech recognition, focus tracking]
+    UI --> CALL[Call screen in the browser: interviewer voice, speech recognition, camera and focus tracking]
     API --> AUTH[Authentication and session service]
     API --> ING[Context preparation service]
     ING --> TOPIC[Model A: Topic clarification]
@@ -223,8 +223,7 @@ flowchart TB
 | Component | Technology | Responsibility |
 |---|---|---|
 | Frontend | React + TypeScript + Vite + Tailwind CSS | Preparation chat, upload UI, configuration, call screen, report |
-| Interviewer avatar | TalkingHead (Three.js, MIT) with free GLB avatars | 3D interviewer with lip-sync, blinking, and head movement, in the browser |
-| Interviewer voice | HeadTTS (Kokoro neural voices, MIT / Apache 2.0) | Text-to-speech with lip-sync timings, in the browser (WebGPU) |
+| Interviewer voice | HeadTTS (Kokoro neural voices, MIT / Apache 2.0) | Text-to-speech with word timings for live captions, in the browser (WebGPU) |
 | Candidate speech | Browser speech recognition (Web Speech API, Chrome) | Live transcript of spoken answers; typing as a fallback |
 | Focus tracking | MediaPipe Face Landmarker (Apache 2.0) + Page Visibility API | Eye contact, face visibility, and tab switches, in the browser |
 | Backend | Python 3.13 + FastAPI + Pydantic | API endpoints, validation, session lifecycle |
@@ -464,7 +463,7 @@ All session/document/job endpoints must authorize access to the resource owner. 
 
 **Raw LLM output:** `llm_calls` keeps the unmodified model response, separate from the validated data in `questions`, `evaluations`, and `reports`.
 
-**Preset avatars:** Presets are a static list of 3D interviewer models (GLB files with a voice each) in the application, identified by a key, so the MVP needs no avatar tables. `users.default_avatar_key` stores the saved choice.
+**Interviewer:** one preset (Maya: a name and a voice) in the application. The call shows the interviewer with the camera off, so there is no 3D model. `users.default_avatar_key` is kept for a future choice of interviewer but is unused.
 
 **Focus and delivery metrics:** Stored per answer as a small set of numbers (for example `looking_away_ratio`, `tab_switches`, `words_per_minute`), only when the candidate consented. No media is stored. The exact columns are fixed in M7.
 
@@ -505,14 +504,14 @@ Originally planned as 15 days (about 30–60 hours). Each milestone ends with pa
 | **M2** | OpenAI-compatible LLM adapter (Ollama), style-aware question generation, rubric evaluator, local model comparison | Real questions and validated evaluations from a local model |
 | **M3** | Frontend flow: topic input → configuration → interview → report | End-to-end interview in the browser (Model A, no clarification yet) |
 | **M4** | Google and GitHub sign-in | Only the owner can access their sessions |
-| **M5** | Call-style interview with voice: pre-call check, call screen, 3D interviewer (TalkingHead) speaking each question (HeadTTS), spoken answers with live captions and a typed fallback | A full Model A interview held as a spoken call in Chrome |
+| **M5** | Call-style interview with voice: pre-call check, call screen, 3D interviewer (TalkingHead) speaking each question (HeadTTS), spoken answers with live captions and a typed fallback. On 2026-11-19 the 3D interviewer was replaced by a camera-off, voice-only tile. | A full Model A interview held as a spoken call in Chrome |
 | **M6** | Conversational interviewer: a reaction to every answer, up to two follow-ups per question, polite refusal of requests for the answer or a score, warm-up and closing, concrete subtopics for vague topics, scoring at the end of the interview (each question with its follow-ups), the next question written while the candidate answers | The call follows a real interview's shape, and no answer waits for scoring |
 | **M7** | Camera and focus: consent, camera tile, eye contact and face visibility (MediaPipe), tab-switch and full-screen detection, speaking pace and filler words, **Delivery and focus** report section | The report shows focus and delivery metrics; no media leaves the browser |
 | **M8** | Model A clarification conversation with the interviewer before the settings: the candidate describes the interview in their own words, the interviewer asks only what is missing (read aloud, answered by voice or typing), then the candidate edits and confirms the plan | Skippable 2–4 question clarification produces a confirmed context |
 | **M9** | Model B: PDF/TXT ingestion, topic map, BM25 retrieval, grounding checks | Document-grounded interview with verified source references |
 | **M10** | Adaptive question selection (on top of the M6 follow-ups), deployment (managed PostgreSQL + hosted LLM mode). A choice of preset interviewers was dropped on 2026-11-19: Maya is the only interviewer. | Deployed demo with fixed and adaptive modes |
 
-**Scope protection:** The MVP interview is a call-style practice interview with spoken questions and answers, a 3D interviewer, and focus signals computed in the browser. Out of scope for the MVP: photo-realistic or generated avatars, paid avatar or voice services, emotion or personality detection, storing or uploading video, audio or screen contents, on-device speech recognition, arbitrary code execution, custom model training, and DOCX/PPTX parsing. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
+**Scope protection:** The MVP interview is a call-style practice interview with spoken questions and answers, a voice-only interviewer (camera off), and focus signals computed in the browser. Out of scope for the MVP: photo-realistic or generated avatars, paid avatar or voice services, emotion or personality detection, storing or uploading video, audio or screen contents, on-device speech recognition, arbitrary code execution, custom model training, and DOCX/PPTX parsing. A small fixed-vs-adaptive comparison is kept; the larger human-rated study in §8 is run only as time allows, with its sample size reported honestly.
 
 ### Team allocation
 
@@ -537,7 +536,7 @@ All members collaborate on API contracts, integration, end-to-end tests, and doc
 - [ ] Direct, conceptual, case-based, scenario-based, application, and mixed questions are supported.
 - [ ] User confirms the interview plan before the first question.
 - [ ] Interview progresses one question at a time with persisted answers.
-- [ ] The interview runs as a call: the 3D interviewer asks each question aloud, and the candidate answers by voice (or typing) with live captions.
+- [ ] The interview runs as a call: the interviewer asks each question aloud, and the candidate answers by voice (or typing) with live captions.
 - [ ] With consent, the report shows eye contact, looking-away, and tab-switch metrics computed in the browser; no video, audio, or screen contents are stored.
 - [ ] Adaptive follow-ups preserve the selected question style and topic scope.
 - [ ] Final report includes scores, answer evidence, and actionable suggestions.
@@ -591,7 +590,7 @@ interact/
 
 ## 12. Demo scenarios
 
-**Scenario A — Topic-based:** “Interview me on operating systems for a software engineering internship.” The AI clarifies focus, the user selects scenario-based questions, and in a call-style interview the 3D interviewer asks situational OS questions aloud, followed by targeted follow-ups. The user answers by speaking, and the report adds eye contact and speaking pace to the rubric scores.
+**Scenario A — Topic-based:** “Interview me on operating systems for a software engineering internship.” The AI clarifies focus, the user selects scenario-based questions, and in a call-style interview the interviewer asks situational OS questions aloud, followed by targeted follow-ups. The user answers by speaking, and the report adds eye contact and speaking pace to the rubric scores.
 
 **Scenario B — Document-based:** User uploads a lecture PDF on database normalization, selects case-based questions, and receives questions tied to the uploaded material, followed by an evidence-based feedback report.
 
@@ -614,7 +613,7 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** M0–M9 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, the Model A clarification chat, and Model B document interviews with verified source references. M10 adaptive mode is implemented; deployment is prepared as one Docker service on Render with Neon and a hosted model (see [docs/deployment.md](docs/deployment.md)) and waits for the team's accounts. The benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** M0–M9 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview, the conversational interviewer, camera and focus feedback, the Model A clarification chat, and Model B document interviews with verified source references. M10 adaptive mode is implemented; deployment is prepared as one Docker service on Render with Neon and a hosted model (see [docs/deployment.md](docs/deployment.md)) and waits for the team's accounts. The benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
 
 

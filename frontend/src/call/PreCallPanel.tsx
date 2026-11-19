@@ -14,8 +14,8 @@ function CheckRow({ label, tone, children }: { label: string; tone: Tone; childr
     <li className="flex gap-3">
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
       <div className="min-w-0 flex-1 text-sm">
-        <p className="font-medium text-slate-100">{label}</p>
-        <div className="mt-0.5 text-slate-400">{children}</div>
+        <p className="font-medium text-slate-800">{label}</p>
+        <div className="mt-0.5 text-slate-500">{children}</div>
       </div>
     </li>
   )
@@ -72,7 +72,7 @@ function MicrophoneCheck({ onReadyChange }: { onReadyChange: (ready: boolean) =>
         <p>{describeProblem('microphone', state.problem)}</p>
         <button
           type="button"
-          className="mt-1 text-violet-300 hover:text-violet-200"
+          className="mt-1 text-violet-600 hover:text-violet-800"
           onClick={() => {
             setState({ status: 'starting' })
             setAttempt((n) => n + 1)
@@ -87,7 +87,7 @@ function MicrophoneCheck({ onReadyChange }: { onReadyChange: (ready: boolean) =>
     <CheckRow label="Microphone" tone="ok">
       <p>Say something: the bar should move.</p>
       <div
-        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800"
+        className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
         role="meter"
         aria-label="Microphone level"
         aria-valuemin={0}
@@ -104,8 +104,9 @@ function VoiceCheck({ name, voice, usingBrowserVoice }: { name: string; voice: V
   if (usingBrowserVoice || voice.status === 'failed') {
     return (
       <CheckRow label={`${name}'s voice`} tone="ok">
-        {voice.status === 'failed' ? `${name}'s natural voice could not start in this browser, so ` : ''}
-        your browser's built-in voice will speak instead.
+        {voice.status === 'failed'
+          ? `${name}'s natural voice could not start in this browser, so your browser's built-in voice will speak instead.`
+          : "Your browser's built-in voice will speak."}
       </CheckRow>
     )
   }
@@ -127,7 +128,7 @@ function VoiceCheck({ name, voice, usingBrowserVoice }: { name: string; voice: V
 
 function CameraCheck({ camera, onCameraOn, onCameraOff }: { camera: CameraState; onCameraOn: () => void; onCameraOff: () => void }) {
   const toggle = (label: string, action: () => void) => (
-    <button type="button" className="mt-1 text-violet-300 hover:text-violet-200" onClick={action}>
+    <button type="button" className="mt-1 text-violet-600 hover:text-violet-800" onClick={action}>
       {label}
     </button>
   )
@@ -200,8 +201,8 @@ export default function PreCallPanel({
   return (
     <Card className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-white">Ready to join?</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-xl font-semibold text-slate-900">Ready to join?</h1>
+        <p className="mt-1 text-sm text-slate-500">
           {interviewerName} will ask {questionCount} questions out loud, one at a time. Answer as you would in a real
           interview.
         </p>
@@ -214,8 +215,8 @@ export default function PreCallPanel({
       </ul>
 
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium text-slate-100">How will you answer?</legend>
-        <label className={`flex gap-2 text-sm ${canSpeak ? 'text-slate-200' : 'text-slate-500'}`}>
+        <legend className="text-sm font-medium text-slate-800">How will you answer?</legend>
+        <label className={`flex gap-2 text-sm ${canSpeak ? 'text-slate-700' : 'text-slate-400'}`}>
           <input
             type="radio"
             name="answer-mode"
@@ -228,14 +229,14 @@ export default function PreCallPanel({
             {!canSpeak && <span className="block text-xs">This browser cannot turn speech into text. Use Chrome to speak.</span>}
           </span>
         </label>
-        <label className="flex gap-2 text-sm text-slate-200">
+        <label className="flex gap-2 text-sm text-slate-700">
           <input type="radio" name="answer-mode" checked={mode === 'type'} onChange={() => setMode('type')} />
           Type my answers
         </label>
       </fieldset>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-        <p className="font-medium text-slate-300">What happens to your camera, microphone and voice</p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+        <p className="font-medium text-slate-600">What happens to your camera, microphone and voice</p>
         <ul className="mt-1 list-disc space-y-1 pl-4">
           <li>Your camera preview stays in this browser. InterAct never records or uploads video.</li>
           <li>
@@ -247,11 +248,11 @@ export default function PreCallPanel({
         </ul>
       </div>
 
-      <label className="flex gap-2 rounded-lg border border-slate-800 p-3 text-sm text-slate-200">
+      <label className="flex gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
         <input type="checkbox" checked={trackFocus} onChange={(event) => setTrackFocus(event.target.checked)} />
         <span>
           Track my focus for practice feedback
-          <span className="mt-1 block text-xs text-slate-400">
+          <span className="mt-1 block text-xs text-slate-500">
             Counts tab switches and time away and, with the camera on, estimates eye contact in this browser. Only the
             numbers are kept, for the Delivery and focus part of your report. Nothing is recorded, and it never
             affects your score.
@@ -270,12 +271,12 @@ export default function PreCallPanel({
           )}
         </Button>
         {voiceLoading && (
-          <button type="button" className="w-full text-center text-xs text-violet-300 hover:text-violet-200" onClick={onUseBrowserVoice}>
+          <button type="button" className="w-full text-center text-xs text-violet-600 hover:text-violet-800" onClick={onUseBrowserVoice}>
             Don't wait: use the browser's voice instead
           </button>
         )}
         {blockedByMic && !voiceLoading && (
-          <p className="text-center text-xs text-slate-400">The microphone must work to speak your answers, or choose typing.</p>
+          <p className="text-center text-xs text-slate-500">The microphone must work to speak your answers, or choose typing.</p>
         )}
       </div>
     </Card>

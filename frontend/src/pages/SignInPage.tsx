@@ -20,7 +20,7 @@ export default function SignInPage() {
   if (state.status === 'signed-in') return <Navigate to={next} replace />
   if (state.status === 'loading') {
     return (
-      <div className="flex justify-center py-16 text-slate-400">
+      <div className="flex justify-center py-16 text-slate-500">
         <Spinner />
       </div>
     )
@@ -63,7 +63,7 @@ function SignInOptions({ next, failed }: { next: string; failed: boolean }) {
 
         <Card className="space-y-3">
           {options.loading && (
-            <div className="flex justify-center py-4 text-slate-400">
+            <div className="flex justify-center py-4 text-slate-500">
               <Spinner />
             </div>
           )}
@@ -82,14 +82,14 @@ function SignInOptions({ next, failed }: { next: string; failed: boolean }) {
             <a
               key={provider}
               href={signInUrl(provider, next)}
-              className="flex w-full items-center justify-center rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+              className="flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-violet-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
             >
               {PROVIDER_LABELS[provider]}
             </a>
           ))}
           {available?.dev_login && (
-            <div className="space-y-2 border-t border-slate-800 pt-3">
-              <p className="text-xs text-slate-400">Development only. Not available on the deployed site.</p>
+            <div className="space-y-2 border-t border-slate-200 pt-3">
+              <p className="text-xs text-slate-500">Development only. Not available on the deployed site.</p>
               <Button variant="secondary" className="w-full" busy={devBusy} onClick={devSignIn}>
                 Continue as local test user
               </Button>
@@ -103,7 +103,7 @@ function SignInOptions({ next, failed }: { next: string; failed: boolean }) {
           )}
         </Card>
 
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-400">
           InterAct keeps only your name and email address from Google or GitHub. It never sees your password.
         </p>
       </div>

@@ -13,7 +13,7 @@ export default function RequireAuth() {
 
   if (state.status === 'loading') {
     return (
-      <div className="flex justify-center py-16 text-slate-400">
+      <div className="flex justify-center py-16 text-slate-500">
         <Spinner />
       </div>
     )

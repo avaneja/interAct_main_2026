@@ -14,7 +14,7 @@ function Bar({ percent }: { percent: number | null }) {
   const value = percent ?? 0
   const tone = value >= 70 ? 'bg-emerald-500' : value >= 40 ? 'bg-amber-500' : 'bg-red-500'
   return (
-    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
       <div className={`h-full ${tone}`} style={{ width: `${value}%` }} />
     </div>
   )
@@ -24,7 +24,7 @@ export default function ReportPage() {
   const { id = '' } = useParams()
   const loaded = useLoad((signal) => api.report(id, signal), id)
 
-  if (loaded.loading) return <p className="text-slate-400">Loading your report…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading your report…</p>
   if (loaded.error instanceof ApiError && loaded.error.status === 409) {
     return <Navigate to={`/sessions/${id}/interview`} replace />
   }
@@ -49,14 +49,14 @@ function Report({ summary }: { summary: ReportSummary }) {
 
       <Card className="flex flex-wrap items-center gap-6">
         <div>
-          <p className="text-5xl font-bold text-white">{summary.percent ?? 0}%</p>
-          <p className="text-sm text-slate-400">
+          <p className="text-5xl font-bold text-slate-900">{summary.percent ?? 0}%</p>
+          <p className="text-sm text-slate-500">
             {summary.score} of {summary.max_score} rubric points
           </p>
         </div>
         <div className="min-w-48 flex-1">
           <Bar percent={summary.percent} />
-          <p className="mt-2 text-xs text-slate-500">{summary.label}. This is a practice estimate, not a hiring decision.</p>
+          <p className="mt-2 text-xs text-slate-400">{summary.label}. This is a practice estimate, not a hiring decision.</p>
         </div>
       </Card>
 
@@ -72,8 +72,8 @@ function Report({ summary }: { summary: ReportSummary }) {
 
       {summary.grounding && (
         <Card>
-          <h2 className="font-semibold text-white">Grounded in your document</h2>
-          <p className="mt-1 text-sm text-slate-300">
+          <h2 className="font-semibold text-slate-900">Grounded in your document</h2>
+          <p className="mt-1 text-sm text-slate-600">
             {summary.grounding.verified} of {summary.grounding.questions} questions were checked against your document: each
             one's quote was found on the page it cites ({summary.grounding.pass_rate ?? 0}%).
           </p>
@@ -82,13 +82,13 @@ function Report({ summary }: { summary: ReportSummary }) {
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
-          <h2 className="font-semibold text-white">By competency</h2>
+          <h2 className="font-semibold text-slate-900">By competency</h2>
           <ul className="mt-3 space-y-3">
             {competencies.map(([name, totals]) => (
               <li key={name}>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-200">{name}</span>
-                  <span className="text-slate-400">
+                  <span className="text-slate-700">{name}</span>
+                  <span className="text-slate-500">
                     {totals.percent ?? 0}% · {totals.questions} question{totals.questions === 1 ? '' : 's'}
                   </span>
                 </div>
@@ -97,23 +97,23 @@ function Report({ summary }: { summary: ReportSummary }) {
                 </div>
               </li>
             ))}
-            {competencies.length === 0 && <li className="text-sm text-slate-400">No answers were scored.</li>}
+            {competencies.length === 0 && <li className="text-sm text-slate-500">No answers were scored.</li>}
           </ul>
         </Card>
 
         <Card className="space-y-4">
           <div>
-            <h2 className="font-semibold text-white">Coverage</h2>
-            <p className="mt-1 text-sm text-slate-300">
+            <h2 className="font-semibold text-slate-900">Coverage</h2>
+            <p className="mt-1 text-sm text-slate-600">
               {summary.coverage.covered.length} of {summary.coverage.planned.length} planned areas assessed
               {summary.coverage.percent !== null ? ` (${summary.coverage.percent}%)` : ''}.
             </p>
             {summary.coverage.not_covered.length > 0 && (
-              <p className="mt-1 text-sm text-slate-400">Not assessed: {summary.coverage.not_covered.join(', ')}.</p>
+              <p className="mt-1 text-sm text-slate-500">Not assessed: {summary.coverage.not_covered.join(', ')}.</p>
             )}
           </div>
           <div>
-            <h2 className="font-semibold text-white">Areas to revise</h2>
+            <h2 className="font-semibold text-slate-900">Areas to revise</h2>
             {summary.areas_to_revise.length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {summary.areas_to_revise.map((area) => (
@@ -121,13 +121,13 @@ function Report({ summary }: { summary: ReportSummary }) {
                 ))}
               </div>
             ) : (
-              <p className="mt-1 text-sm text-slate-400">Nothing stood out as weak.</p>
+              <p className="mt-1 text-sm text-slate-500">Nothing stood out as weak.</p>
             )}
           </div>
           {summary.missing_concepts.length > 0 && (
             <div>
-              <h2 className="font-semibold text-white">Concepts you missed</h2>
-              <p className="mt-1 text-sm text-slate-300">{summary.missing_concepts.join(', ')}</p>
+              <h2 className="font-semibold text-slate-900">Concepts you missed</h2>
+              <p className="mt-1 text-sm text-slate-600">{summary.missing_concepts.join(', ')}</p>
             </div>
           )}
         </Card>
@@ -136,17 +136,17 @@ function Report({ summary }: { summary: ReportSummary }) {
       {summary.delivery && <DeliverySection delivery={summary.delivery} />}
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold text-white">Question by question</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Question by question</h2>
         {summary.questions.map((question) => (
           <QuestionDetails key={question.sequence} question={question} />
         ))}
       </div>
 
       <div className="flex gap-3">
-        <Link to="/new" className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-500">
+        <Link to="/new" className="bg-brand rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-fuchsia-300/50 hover:brightness-110">
           Start another interview
         </Link>
-        <Link to="/history" className="rounded-lg border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-100 hover:bg-slate-800">
+        <Link to="/history" className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-violet-50">
           Your interviews
         </Link>
       </div>
@@ -157,33 +157,33 @@ function Report({ summary }: { summary: ReportSummary }) {
 function QuestionDetails({ question }: { question: QuestionReport }) {
   const evaluation = question.evaluation
   return (
-    <details className="group rounded-xl border border-slate-800 bg-slate-900/60 open:bg-slate-900">
+    <details className="group rounded-xl border border-slate-200 bg-white/70 open:bg-white">
       <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-4">
         <div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-500">
             Question {question.sequence} · {styleLabel(question.type)} · {question.competency} · {difficultyLabel(question.difficulty)}
           </p>
-          <p className="mt-1 text-slate-100">{question.prompt}</p>
+          <p className="mt-1 text-slate-800">{question.prompt}</p>
         </div>
-        <span className="shrink-0 text-sm font-semibold text-slate-200">
+        <span className="shrink-0 text-sm font-semibold text-slate-700">
           {evaluation ? `${evaluation.score}/${evaluation.max_score}` : 'Not answered'}
         </span>
       </summary>
-      <div className="space-y-4 border-t border-slate-800 p-4 text-sm">
+      <div className="space-y-4 border-t border-slate-200 p-4 text-sm">
         {question.grounding && <SourceNote grounding={question.grounding} />}
         <div>
-          <h3 className="font-semibold text-slate-200">Your answer</h3>
-          <p className="mt-1 whitespace-pre-wrap text-slate-300">{question.answer ?? 'You did not answer this question.'}</p>
+          <h3 className="font-semibold text-slate-700">Your answer</h3>
+          <p className="mt-1 whitespace-pre-wrap text-slate-600">{question.answer ?? 'You did not answer this question.'}</p>
         </div>
         {question.follow_ups.length > 0 && (
-          <div className="space-y-3 border-l-2 border-slate-800 pl-3">
+          <div className="space-y-3 border-l-2 border-slate-200 pl-3">
             {question.follow_ups.map((followUp, index) => (
               <div key={index}>
-                <h3 className="font-semibold text-slate-200">Follow-up: {followUp.prompt}</h3>
-                <p className="mt-1 whitespace-pre-wrap text-slate-300">{followUp.answer ?? 'Not answered.'}</p>
+                <h3 className="font-semibold text-slate-700">Follow-up: {followUp.prompt}</h3>
+                <p className="mt-1 whitespace-pre-wrap text-slate-600">{followUp.answer ?? 'Not answered.'}</p>
               </div>
             ))}
-            <p className="text-xs text-slate-500">Your replies to follow-ups are scored together with your answer.</p>
+            <p className="text-xs text-slate-400">Your replies to follow-ups are scored together with your answer.</p>
           </div>
         )}
         {evaluation?.insufficient_evidence && (
@@ -191,19 +191,19 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
         )}
         {evaluation && (
           <div>
-            <h3 className="font-semibold text-slate-200">Scores</h3>
+            <h3 className="font-semibold text-slate-700">Scores</h3>
             <ul className="mt-2 space-y-2">
               {evaluation.criteria.map((criterion) => (
-                <li key={criterion.name} className="rounded-lg bg-slate-950/60 p-3">
+                <li key={criterion.name} className="rounded-lg bg-slate-50 p-3">
                   <div className="flex justify-between">
-                    <span className="font-medium capitalize text-slate-100">{criterion.name}</span>
-                    <span className="text-slate-300">
+                    <span className="font-medium capitalize text-slate-800">{criterion.name}</span>
+                    <span className="text-slate-600">
                       {criterion.score}/{criterion.max_score}
                     </span>
                   </div>
-                  <p className="mt-1 text-slate-400">{criterion.reason}</p>
+                  <p className="mt-1 text-slate-500">{criterion.reason}</p>
                   {criterion.evidence_quote && (
-                    <blockquote className="mt-2 border-l-2 border-violet-500 pl-3 italic text-slate-300">
+                    <blockquote className="mt-2 border-l-2 border-violet-500 pl-3 italic text-slate-600">
                       “{criterion.evidence_quote}”
                     </blockquote>
                   )}
@@ -215,8 +215,8 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
         {question.document_points && <DocumentPoints points={question.document_points} />}
         {question.better_answer_outline.length > 0 && (
           <div>
-            <h3 className="font-semibold text-slate-200">A stronger answer would cover</h3>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-300">
+            <h3 className="font-semibold text-slate-700">A stronger answer would cover</h3>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600">
               {question.better_answer_outline.map((point) => (
                 <li key={point}>{point}</li>
               ))}
@@ -224,12 +224,12 @@ function QuestionDetails({ question }: { question: QuestionReport }) {
           </div>
         )}
         {evaluation && evaluation.missing_concepts.length > 0 && (
-          <p className="text-slate-400">Missing: {evaluation.missing_concepts.join(', ')}</p>
+          <p className="text-slate-500">Missing: {evaluation.missing_concepts.join(', ')}</p>
         )}
         {question.answer_key && (
           <div>
-            <h3 className="font-semibold text-slate-200">Key points from the source</h3>
-            <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-300">
+            <h3 className="font-semibold text-slate-700">Key points from the source</h3>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600">
               {question.answer_key.key_points.map((point) => (
                 <li key={point}>{point}</li>
               ))}
@@ -252,15 +252,15 @@ function sourcePages(sources: NonNullable<QuestionReport['grounding']>['sources'
 
 function SourceNote({ grounding }: { grounding: NonNullable<QuestionReport['grounding']> }) {
   return (
-    <div className="rounded-lg bg-slate-950/60 p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
+    <div className="rounded-lg bg-slate-50 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
         {grounding.sources.length > 0 ? `From your document, ${sourcePages(grounding.sources)}` : 'From your document'}
       </p>
       {grounding.supporting_quote && (
-        <blockquote className="mt-2 border-l-2 border-emerald-500 pl-3 italic text-slate-300">“{grounding.supporting_quote}”</blockquote>
+        <blockquote className="mt-2 border-l-2 border-emerald-500 pl-3 italic text-slate-600">“{grounding.supporting_quote}”</blockquote>
       )}
       {grounding.status === 'FLAGGED' && (
-        <p className="mt-2 text-amber-200">Not verified: {grounding.note ?? 'the source could not be checked'}. Check it against your notes.</p>
+        <p className="mt-2 text-amber-800">Not verified: {grounding.note ?? 'the source could not be checked'}. Check it against your notes.</p>
       )}
     </div>
   )
@@ -271,8 +271,8 @@ function DocumentPoints({ points }: { points: NonNullable<QuestionReport['docume
   const list = (items: typeof points.supported) => (
     <ul className="mt-1 space-y-1.5">
       {items.map((item) => (
-        <li key={item.quote} className="text-slate-300">
-          {item.point} <span className="italic text-slate-500">(you said “{item.quote}”)</span>
+        <li key={item.quote} className="text-slate-600">
+          {item.point} <span className="italic text-slate-400">(you said “{item.quote}”)</span>
         </li>
       ))}
     </ul>
@@ -280,13 +280,13 @@ function DocumentPoints({ points }: { points: NonNullable<QuestionReport['docume
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div>
-        <h3 className="font-semibold text-emerald-300">Supported by your document</h3>
-        {points.supported.length ? list(points.supported) : <p className="mt-1 text-slate-500">Nothing from the document.</p>}
+        <h3 className="font-semibold text-emerald-700">Supported by your document</h3>
+        {points.supported.length ? list(points.supported) : <p className="mt-1 text-slate-400">Nothing from the document.</p>}
       </div>
       <div>
-        <h3 className="font-semibold text-sky-300">Beyond your document</h3>
-        <p className="text-xs text-slate-500">Outside knowledge: not wrong for that reason, but not in your notes.</p>
-        {points.outside.length ? list(points.outside) : <p className="mt-1 text-slate-500">Nothing beyond it.</p>}
+        <h3 className="font-semibold text-sky-700">Beyond your document</h3>
+        <p className="text-xs text-slate-400">Outside knowledge: not wrong for that reason, but not in your notes.</p>
+        {points.outside.length ? list(points.outside) : <p className="mt-1 text-slate-400">Nothing beyond it.</p>}
       </div>
     </div>
   )
@@ -295,9 +295,9 @@ function DocumentPoints({ points }: { points: NonNullable<QuestionReport['docume
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div>
-      <dt className="text-xs text-slate-400">{label}</dt>
-      <dd className="mt-0.5 text-lg font-semibold text-white">{value}</dd>
-      {hint && <dd className="text-xs text-slate-500">{hint}</dd>}
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="mt-0.5 text-lg font-semibold text-slate-900">{value}</dd>
+      {hint && <dd className="text-xs text-slate-400">{hint}</dd>}
     </div>
   )
 }
@@ -308,8 +308,8 @@ function DeliverySection({ delivery }: { delivery: DeliverySummary }) {
   const seconds = delivery.speaking_seconds % 60
   return (
     <Card>
-      <h2 className="font-semibold text-white">Delivery and focus</h2>
-      <p className="mt-1 text-sm text-slate-400">{delivery.note}</p>
+      <h2 className="font-semibold text-slate-900">Delivery and focus</h2>
+      <p className="mt-1 text-sm text-slate-500">{delivery.note}</p>
       <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Answering time" value={`${minutes}:${String(seconds).padStart(2, '0')}`} hint={`${delivery.answers_measured} answers`} />
         <Stat

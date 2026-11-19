@@ -14,15 +14,15 @@ export default function WaitingNotice({ message, startedAt }: { message: string;
 
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-sky-900 bg-sky-950/40 px-4 py-3 text-sm text-sky-100" role="status">
+    <div className="flex items-start gap-3 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900" role="status">
       <span className="mt-0.5">
         <Spinner />
       </span>
       <div>
         <p>
-          {message} <span className="tabular-nums text-sky-300">{seconds}s</span>
+          {message} <span className="tabular-nums text-sky-700">{seconds}s</span>
         </p>
-        <p className="mt-1 text-sky-300/80">
+        <p className="mt-1 text-sky-700">
           {seconds >= SLOW_AFTER_SECONDS
             ? 'Still working. Local models can be slow; your answer is already saved, so you can keep waiting.'
             : 'With a local model this usually takes 10 to 60 seconds.'}

@@ -48,7 +48,7 @@ function PrepareSession({ id }: { id: string }) {
     id,
   )
 
-  if (loaded.loading) return <p className="text-slate-400">Loading…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading…</p>
   if (loaded.error || !loaded.data) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={loaded.reload}>Try again</Button>}>
@@ -105,7 +105,7 @@ function RequestForm({ sessionId, onSent }: { sessionId: string | null; onSent?:
       />
       <Card>
         <form className="space-y-4" onSubmit={submit} noValidate>
-          <label htmlFor="request" className="block text-sm font-medium text-slate-200">
+          <label htmlFor="request" className="block text-sm font-medium text-slate-700">
             Your interview
           </label>
           <textarea
@@ -123,11 +123,11 @@ function RequestForm({ sessionId, onSent }: { sessionId: string | null; onSent?:
           {error && <Alert title="Could not start">{error}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="flex flex-wrap gap-4">
-              <Link to={created ? `/sessions/${created}/topic` : '/new/form'} className="text-sm text-slate-300 hover:text-white">
+              <Link to={created ? `/sessions/${created}/topic` : '/new/form'} className="text-sm text-slate-600 hover:text-slate-900">
                 Fill in a form instead
               </Link>
               {!created && (
-                <Link to="/new/document" className="text-sm text-slate-300 hover:text-white">
+                <Link to="/new/document" className="text-sm text-slate-600 hover:text-slate-900">
                   Use your own notes (PDF or TXT)
                 </Link>
               )}
@@ -148,7 +148,7 @@ function Bubble({ entry }: { entry: PreparationMessage }) {
     <li className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-          mine ? 'bg-violet-600 text-white' : 'border border-slate-800 bg-slate-900 text-slate-100'
+          mine ? 'bg-brand text-white shadow-md shadow-fuchsia-200' : 'border border-slate-200 bg-white text-slate-800 shadow-sm'
         }`}
       >
         <p className="mb-0.5 text-xs font-medium opacity-70">{mine ? 'You' : NAME}</p>
@@ -218,7 +218,7 @@ function Chat({ id, initial }: { id: string; initial: PreparationView }) {
           ))}
         </ol>
         {busy && (
-          <p className="flex items-center gap-2 text-sm text-slate-400" role="status">
+          <p className="flex items-center gap-2 text-sm text-slate-500" role="status">
             <Spinner /> {NAME} is thinking…
           </p>
         )}
@@ -241,7 +241,7 @@ function Chat({ id, initial }: { id: string; initial: PreparationView }) {
           onEnough={() => send({ text: reply.trim(), enough: true })}
         />
         {!SILENT && canUseBrowserVoice() && (
-          <label className="flex items-center gap-2 text-xs text-slate-400">
+          <label className="flex items-center gap-2 text-xs text-slate-500">
             <input type="checkbox" checked={voiceOn} onChange={(event) => toggleVoice(event.target.checked)} />
             Read {NAME}'s questions aloud
           </label>
@@ -306,8 +306,8 @@ function ReplyBox({
 
   const unanswered = !done && question === null
   return (
-    <form className="space-y-3 border-t border-slate-800 pt-4" onSubmit={submit}>
-      <label htmlFor="reply" className="block text-sm font-medium text-slate-200">
+    <form className="space-y-3 border-t border-slate-200 pt-4" onSubmit={submit}>
+      <label htmlFor="reply" className="block text-sm font-medium text-slate-700">
         {done ? `Anything to change? Tell ${NAME}, or edit the plan below.` : unanswered ? 'Send your message again' : 'Your reply'}
       </label>
       <textarea
@@ -374,8 +374,8 @@ function ScopeEditor({ id, view }: { id: string; view: PreparationView }) {
     <Card>
       <form className="space-y-5" onSubmit={confirm} noValidate aria-label="Your interview plan">
         <div>
-          <h2 className="text-lg font-semibold text-white">Your interview plan</h2>
-          <p className="mt-1 text-sm text-slate-400">Check it, change anything, then confirm. Nothing starts until you do.</p>
+          <h2 className="text-lg font-semibold text-slate-900">Your interview plan</h2>
+          <p className="mt-1 text-sm text-slate-500">Check it, change anything, then confirm. Nothing starts until you do.</p>
         </div>
         <ScopeFields
           draft={draft}

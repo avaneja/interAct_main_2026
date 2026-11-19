@@ -12,7 +12,7 @@ export default function PlanPage() {
   const { id = '' } = useParams()
   const loaded = useLoad((signal) => api.getSession(id, signal), id)
 
-  if (loaded.loading) return <p className="text-slate-400">Loading…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading…</p>
   if (loaded.error || !loaded.data) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={loaded.reload}>Try again</Button>}>
@@ -64,10 +64,10 @@ function PlanReview({ session }: { session: SessionView }) {
 
       <Card className="grid gap-4 sm:grid-cols-2">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Topic</h2>
-          <p className="mt-1 text-lg text-white">{context.topic}</p>
-          {context.goal && <p className="text-sm text-slate-300">Goal: {context.goal}</p>}
-          {context.level && <p className="text-sm text-slate-300">Your level: {difficultyLabel(context.level)}</p>}
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Topic</h2>
+          <p className="mt-1 text-lg text-slate-900">{context.topic}</p>
+          {context.goal && <p className="text-sm text-slate-600">Goal: {context.goal}</p>}
+          {context.level && <p className="text-sm text-slate-600">Your level: {difficultyLabel(context.level)}</p>}
           {context.subtopics.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {context.subtopics.map((s) => (
@@ -77,26 +77,26 @@ function PlanReview({ session }: { session: SessionView }) {
           )}
         </div>
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">Settings</h2>
-          <dl className="mt-1 space-y-1 text-sm text-slate-200">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Settings</h2>
+          <dl className="mt-1 space-y-1 text-sm text-slate-700">
             <div>
-              <dt className="inline text-slate-400">Style: </dt>
+              <dt className="inline text-slate-500">Style: </dt>
               <dd className="inline">{styleLabel(config.question_type)}</dd>
             </div>
             <div>
-              <dt className="inline text-slate-400">Difficulty: </dt>
+              <dt className="inline text-slate-500">Difficulty: </dt>
               <dd className="inline">{difficultyLabel(config.difficulty)}</dd>
             </div>
             <div>
-              <dt className="inline text-slate-400">Questions: </dt>
+              <dt className="inline text-slate-500">Questions: </dt>
               <dd className="inline">{config.question_count}</dd>
             </div>
             <div>
-              <dt className="inline text-slate-400">Mode: </dt>
+              <dt className="inline text-slate-500">Mode: </dt>
               <dd className="inline">{config.adaptive ? 'Adaptive (follow-ups, revisits weak areas)' : 'Fixed order, no follow-ups'}</dd>
             </div>
             <div>
-              <dt className="inline text-slate-400">Feedback: </dt>
+              <dt className="inline text-slate-500">Feedback: </dt>
               <dd className="inline">At the end</dd>
             </div>
           </dl>
@@ -105,12 +105,12 @@ function PlanReview({ session }: { session: SessionView }) {
 
       {session.plan && (
         <Card>
-          <h2 className="font-semibold text-white">Questions you will be asked</h2>
-          <ol className="mt-3 divide-y divide-slate-800">
+          <h2 className="font-semibold text-slate-900">Questions you will be asked</h2>
+          <ol className="mt-3 divide-y divide-slate-100">
             {session.plan.map((planned) => (
               <li key={planned.sequence} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span className="text-slate-300">
-                  <span className="mr-2 text-slate-500">{planned.sequence}.</span>
+                <span className="text-slate-600">
+                  <span className="mr-2 text-slate-400">{planned.sequence}.</span>
                   {planned.competency}
                 </span>
                 <Badge tone="violet">{styleLabel(planned.question_type)}</Badge>
@@ -127,7 +127,7 @@ function PlanReview({ session }: { session: SessionView }) {
         {confirmed ? (
           <span />
         ) : (
-          <Link to={`/sessions/${session.id}/configure`} className="text-sm text-slate-300 hover:text-white">
+          <Link to={`/sessions/${session.id}/configure`} className="text-sm text-slate-600 hover:text-slate-900">
             ← Change settings
           </Link>
         )}

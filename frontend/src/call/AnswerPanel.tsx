@@ -132,19 +132,19 @@ export default function AnswerPanel({
   return (
     <Card className="flex h-full flex-col gap-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-violet-300">{label}</p>
-        <p className="mt-1 text-sm leading-relaxed text-slate-100">{prompt}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-violet-600">{label}</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-800">{prompt}</p>
       </div>
 
       {phase === 'answering' ? (
         <>
-          <div className="min-h-32 flex-1 rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-sm" aria-live="polite">
+          <div className="min-h-32 flex-1 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm" aria-live="polite">
             {spoken ? (
               <p>
-                <span className="text-slate-100">{heard.confirmed}</span> <span className="text-slate-400">{heard.pending}</span>
+                <span className="text-slate-800">{heard.confirmed}</span> <span className="text-slate-500">{heard.pending}</span>
               </p>
             ) : (
-              <p className="text-slate-500">
+              <p className="text-slate-400">
                 {!canListen
                   ? `Listen to ${interviewerName}. Your microphone turns on when ${interviewerName} finishes.`
                   : !microphoneOn
@@ -154,12 +154,12 @@ export default function AnswerPanel({
             )}
           </div>
           {canListen && !microphoneOn && spoken && (
-            <p className="text-xs text-slate-400">Your microphone is muted. Unmute to keep answering, or press Done.</p>
+            <p className="text-xs text-slate-500">Your microphone is muted. Unmute to keep answering, or press Done.</p>
           )}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
-              className="text-sm text-violet-300 hover:text-violet-200"
+              className="text-sm text-violet-600 hover:text-violet-800"
               onClick={() => {
                 setTyping(true)
                 review()
@@ -185,7 +185,7 @@ export default function AnswerPanel({
               {describeRecognitionProblem(problem)} You can type or finish your answer here.
             </Alert>
           )}
-          <label htmlFor="answer-review" className="text-sm font-medium text-slate-200">
+          <label htmlFor="answer-review" className="text-sm font-medium text-slate-700">
             {typing ? 'Your answer' : 'Check your answer'}
           </label>
           <textarea
@@ -200,14 +200,14 @@ export default function AnswerPanel({
             disabled={sending}
             placeholder={typing ? 'Answer as you would in a real interview.' : undefined}
           />
-          <p className="flex justify-between gap-2 text-xs text-slate-500">
+          <p className="flex justify-between gap-2 text-xs text-slate-400">
             <span>{typing ? 'Your answer is saved in this browser as you type.' : 'Fix any words the browser heard wrong, then send.'}</span>
             <span>
               {draft.length.toLocaleString()} / {MAX_ANSWER.toLocaleString()}
             </span>
           </p>
           {!canListen && !sending && (
-            <p className="text-xs text-slate-400">You can send once {interviewerName} has finished speaking.</p>
+            <p className="text-xs text-slate-500">You can send once {interviewerName} has finished speaking.</p>
           )}
           {error && <Alert title="Your answer was not sent">{error} Your answer is still here, so you can send it again.</Alert>}
           <div className="flex flex-wrap justify-between gap-2">

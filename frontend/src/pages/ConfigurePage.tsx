@@ -16,15 +16,17 @@ const DEFAULT_CONFIG: InterviewConfig = {
 }
 
 const optionClass = (selected: boolean) =>
-  `flex h-full cursor-pointer flex-col rounded-lg border p-3 text-left transition-colors ${
-    selected ? 'border-violet-500 bg-violet-950/40' : 'border-slate-700 hover:border-slate-500'
+  `flex h-full cursor-pointer flex-col rounded-2xl border-2 p-3.5 text-left transition ${
+    selected
+      ? 'border-violet-500 bg-gradient-to-br from-violet-50 to-fuchsia-50 shadow-md shadow-violet-200/60'
+      : 'border-slate-100 bg-white hover:border-violet-200 hover:shadow-sm'
   }`
 
 export default function ConfigurePage() {
   const { id = '' } = useParams()
   const loaded = useLoad((signal) => api.getSession(id, signal), id)
 
-  if (loaded.loading) return <p className="text-slate-400">Loading…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading…</p>
   if (loaded.error || !loaded.data) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={loaded.reload}>Try again</Button>}>
@@ -62,7 +64,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
       <form className="space-y-6" onSubmit={submit}>
         <Card>
           <fieldset>
-            <legend className="font-semibold text-white">Question style</legend>
+            <legend className="font-semibold text-slate-900">Question style</legend>
             <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {QUESTION_STYLES.map((style) => (
                 <label key={style.value} className={optionClass(config.question_type === style.value)}>
@@ -74,9 +76,9 @@ function ConfigureForm({ session }: { session: SessionView }) {
                     checked={config.question_type === style.value}
                     onChange={() => setConfig((c) => ({ ...c, question_type: style.value as QuestionType }))}
                   />
-                  <span className="font-medium text-white">{style.label}</span>
-                  <span className="mt-1 text-sm text-slate-300">{style.description}</span>
-                  <span className="mt-2 text-xs italic text-slate-500">“{style.example}”</span>
+                  <span className="font-medium text-slate-900">{style.label}</span>
+                  <span className="mt-1 text-sm text-slate-600">{style.description}</span>
+                  <span className="mt-2 text-xs italic text-slate-400">“{style.example}”</span>
                 </label>
               ))}
             </div>
@@ -85,7 +87,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
 
         <Card>
           <fieldset>
-            <legend className="font-semibold text-white">Difficulty</legend>
+            <legend className="font-semibold text-slate-900">Difficulty</legend>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               {DIFFICULTIES.map((difficulty) => (
                 <label key={difficulty.value} className={optionClass(config.difficulty === difficulty.value)}>
@@ -97,8 +99,8 @@ function ConfigureForm({ session }: { session: SessionView }) {
                     checked={config.difficulty === difficulty.value}
                     onChange={() => setConfig((c) => ({ ...c, difficulty: difficulty.value as Difficulty }))}
                   />
-                  <span className="font-medium text-white">{difficulty.label}</span>
-                  <span className="mt-1 text-sm text-slate-300">{difficulty.description}</span>
+                  <span className="font-medium text-slate-900">{difficulty.label}</span>
+                  <span className="mt-1 text-sm text-slate-600">{difficulty.description}</span>
                 </label>
               ))}
             </div>
@@ -107,7 +109,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
 
         <Card className="grid gap-6 sm:grid-cols-2">
           <fieldset>
-            <legend className="font-semibold text-white">Number of questions</legend>
+            <legend className="font-semibold text-slate-900">Number of questions</legend>
             <div className="mt-3 flex gap-2">
               {QUESTION_COUNTS.map((count) => (
                 <label key={count} className={`${optionClass(config.question_count === count)} items-center px-5`}>
@@ -119,13 +121,13 @@ function ConfigureForm({ session }: { session: SessionView }) {
                     checked={config.question_count === count}
                     onChange={() => setConfig((c) => ({ ...c, question_count: count as QuestionCount }))}
                   />
-                  <span className="font-semibold text-white">{count}</span>
+                  <span className="font-semibold text-slate-900">{count}</span>
                 </label>
               ))}
             </div>
           </fieldset>
           <div>
-            <p className="font-semibold text-white">Adaptive interview</p>
+            <p className="font-semibold text-slate-900">Adaptive interview</p>
             <label className="mt-3 flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
@@ -133,7 +135,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
                 checked={config.adaptive}
                 onChange={(e) => setConfig((c) => ({ ...c, adaptive: e.target.checked }))}
               />
-              <span className="text-sm text-slate-300">
+              <span className="text-sm text-slate-600">
                 The interviewer follows up when an answer is thin or incomplete (up to two per question), and comes back to
                 areas you answered weakly. Turn it off to get the planned questions in order, with no follow-ups.
               </span>
@@ -145,7 +147,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             to={session.input_model === 'DOCUMENT' ? `/sessions/${session.id}/document` : `/sessions/${session.id}/topic`}
-            className="text-sm text-slate-300 hover:text-white"
+            className="text-sm text-slate-600 hover:text-slate-900"
           >
             {session.input_model === 'DOCUMENT' ? '← Change topics' : '← Edit topic'}
           </Link>

@@ -84,7 +84,7 @@ export default function CallPage() {
   const { id = '' } = useParams()
   const loaded = useLoad((signal) => loadSnapshot(id, signal), id)
 
-  if (loaded.loading) return <p className="text-slate-400">Loading your interview…</p>
+  if (loaded.loading) return <p className="text-slate-500">Loading your interview…</p>
   if (loaded.error || !loaded.data) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={loaded.reload}>Try again</Button>}>
@@ -509,8 +509,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     if (stage === 'finishing') {
       return (
         <Card className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">Writing your report</h2>
-          <p className="text-sm text-slate-400">
+          <h2 className="text-lg font-semibold text-slate-900">Writing your report</h2>
+          <p className="text-sm text-slate-500">
             Every answer is being scored against its rubric, together with its follow-ups.
           </p>
           {callError ? (
@@ -526,8 +526,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     if (confirmEnd) {
       return (
         <Card className="space-y-3">
-          <h2 className="text-lg font-semibold text-white">End the interview now?</h2>
-          <p className="text-sm text-slate-400">
+          <h2 className="text-lg font-semibold text-slate-900">End the interview now?</h2>
+          <p className="text-sm text-slate-500">
             {answered < total
               ? `The remaining questions are skipped. Your report covers the ${answered} answered so far.`
               : 'Your report covers all of your answers.'}
@@ -546,8 +546,8 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
     if (stage === 'paused') {
       return (
         <Card className="space-y-3 text-center">
-          <h2 className="text-lg font-semibold text-white">Interview paused</h2>
-          <p className="text-sm text-slate-400">
+          <h2 className="text-lg font-semibold text-slate-900">Interview paused</h2>
+          <p className="text-sm text-slate-500">
             {answered} of {total} questions answered. Your progress is saved, so you can also come back later.
           </p>
           {callError && <Alert>{callError}</Alert>}
@@ -659,7 +659,7 @@ function Call({ initialSession, initialQuestion }: { initialSession: SessionView
       caption={caption}
       captionsOn={captionsOn}
       header={
-        <div className="flex items-center justify-between text-sm text-slate-400">
+        <div className="flex items-center justify-between text-sm text-slate-500">
           <span>
             Interview with {preset.name}
             {headerDetail}

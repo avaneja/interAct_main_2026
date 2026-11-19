@@ -13,7 +13,7 @@ export default function TopicPage() {
   const { id } = useParams()
   const existing = useLoad<SessionView | null>((signal) => (id ? api.getSession(id, signal) : Promise.resolve(null)), id ?? 'new')
 
-  if (existing.loading) return <p className="text-slate-400">Loading…</p>
+  if (existing.loading) return <p className="text-slate-500">Loading…</p>
   if (existing.error) {
     return (
       <Alert title="Could not load this interview" action={<Button variant="secondary" onClick={existing.reload}>Try again</Button>}>
@@ -77,7 +77,7 @@ function TopicForm({ session }: { session: SessionView | null }) {
           {serverError && <Alert title="Could not save your topic">{serverError}</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3">
             {(!session || session.state === 'PREPARING') ? (
-              <Link to={sessionId ? `/sessions/${sessionId}/prepare` : '/new'} className="text-sm text-slate-300 hover:text-white">
+              <Link to={sessionId ? `/sessions/${sessionId}/prepare` : '/new'} className="text-sm text-slate-600 hover:text-slate-900">
                 Describe it in your own words instead
               </Link>
             ) : (
