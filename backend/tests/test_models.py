@@ -260,3 +260,16 @@ def test_new_rows_get_ids_timestamps_and_defaults(db):
     assert session.created_at is not None
     assert question.grounding_status == "NOT_APPLICABLE"
     assert question.source_chunk_ids == []
+
+
+def test_labels_built_from_prompt_versions_fit_their_columns():
+    """SQLite ignores string lengths, so a value too long for PostgreSQL would pass every other test."""
+    from app.models import Evaluation, LLMCall
+    from app.services.prompts import PROMPT_VERSIONS
+
+    for purpose, version in PROMPT_VERSIONS.items():
+        assert len(purpose) <= LLMCall.__table__.c.purpose.type.length, purpose
+        assert len(version) <= LLMCall.__table__.c.prompt_version.type.length, version
+    longest_model = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free-with-a-long-provider-suffix"
+    longest = max(f"{longest_model}|reasoning-v1|{version}" for version in PROMPT_VERSIONS.values())
+    assert len(longest) <= Evaluation.__table__.c.evaluator_version.type.length

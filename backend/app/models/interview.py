@@ -179,7 +179,8 @@ class Evaluation(IdMixin, CreatedAtMixin, Base):
     )
     scores_json: Mapped[dict[str, Any]] = mapped_column(JSONType)
     evidence_json: Mapped[list[dict[str, Any]]] = mapped_column(JSONType, default=list)
-    evaluator_version: Mapped[str] = mapped_column(String(50))
+    # "<model>|<rubric>|<prompt version>": hosted model names can be long.
+    evaluator_version: Mapped[str] = mapped_column(String(255))
 
     answer: Mapped[Answer] = relationship(back_populates="evaluation")
 
