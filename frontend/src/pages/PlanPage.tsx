@@ -92,8 +92,8 @@ function PlanReview({ session }: { session: SessionView }) {
               <dd className="inline">{config.question_count}</dd>
             </div>
             <div>
-              <dt className="inline text-slate-400">Follow-ups: </dt>
-              <dd className="inline">{config.adaptive ? 'Allowed' : 'Off'}</dd>
+              <dt className="inline text-slate-400">Mode: </dt>
+              <dd className="inline">{config.adaptive ? 'Adaptive (follow-ups, revisits weak areas)' : 'Fixed order, no follow-ups'}</dd>
             </div>
             <div>
               <dt className="inline text-slate-400">Feedback: </dt>

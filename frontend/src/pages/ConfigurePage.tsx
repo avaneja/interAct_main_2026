@@ -125,7 +125,7 @@ function ConfigureForm({ session }: { session: SessionView }) {
             </div>
           </fieldset>
           <div>
-            <p className="font-semibold text-white">Follow-up questions</p>
+            <p className="font-semibold text-white">Adaptive interview</p>
             <label className="mt-3 flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
@@ -134,8 +134,8 @@ function ConfigureForm({ session }: { session: SessionView }) {
                 onChange={(e) => setConfig((c) => ({ ...c, adaptive: e.target.checked }))}
               />
               <span className="text-sm text-slate-300">
-                Allow follow-ups that dig deeper when an answer is incomplete. Your choice is saved with the plan;
-                follow-ups arrive in a later version, so questions follow the plan for now.
+                The interviewer follows up when an answer is thin or incomplete (up to two per question), and comes back to
+                areas you answered weakly. Turn it off to get the planned questions in order, with no follow-ups.
               </span>
             </label>
           </div>

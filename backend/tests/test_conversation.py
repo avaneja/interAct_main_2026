@@ -218,7 +218,7 @@ def test_the_last_question_has_no_transition(db, user, llm):
 # Scoring a question with its follow-ups
 
 
-def answered_with_follow_up(db, user, llm, main=ANSWER, follow_up_reply="Training error falls while validation error rises."):
+def answered_with_follow_up(db, user, llm, main=ANSWER, follow_up_reply="Training error keeps falling while validation error starts rising, which shows the model is memorising noise."):
     session, first = start(db, user, llm)
     llm.queue_for("interviewer_turn", turn(follow_up="How would you spot it?"))
     follow_up = reply(first, db, user, session, llm, text=main).next_question
@@ -233,14 +233,15 @@ def test_a_question_is_scored_with_its_follow_ups(db, user, llm):
     request = next(r for r in llm.requests if r.purpose == "evaluate_answer")
     assert (
         "Follow-up question: How would you spot it?\n"
-        "Candidate's reply: Training error falls while validation error rises."
+        "Candidate's reply: Training error keeps falling while validation error starts rising, "
+        "which shows the model is memorising noise."
     ) in request.user
     assert len(list(db.scalars(select(Evaluation)))) == 1  # One score for the question and its follow-up.
 
 
 def test_quotes_must_be_the_candidates_own_words(db, user, llm):
     criteria = [{"name": c.name, "score": 1, "max_score": c.max_score, "reason": "r"} for c in REASONING.criteria]
-    criteria[0]["evidence_quote"] = "validation error rises"
+    criteria[0]["evidence_quote"] = "validation error starts rising"
     criteria[1]["evidence_quote"] = "How would you spot it"  # The interviewer's words, not the candidate's.
     llm.queue_for("evaluate_answer", json.dumps({"criteria": criteria}))
 
@@ -248,7 +249,7 @@ def test_quotes_must_be_the_candidates_own_words(db, user, llm):
 
     stored = db.scalar(select(Evaluation))
     quotes = [c["evidence_quote"] for c in stored.evidence_json]
-    assert quotes[:2] == ["validation error rises", None]
+    assert quotes[:2] == ["validation error starts rising", None]
     assert stored.scores_json["evidence"] == {"quotes_verified": 1, "quotes_removed": 1}
 
 
@@ -280,7 +281,7 @@ def test_the_report_lists_follow_ups_under_their_question(db, user, llm):
 
     assert [q["sequence"] for q in report["questions"]] == [1, 2]
     assert report["questions"][0]["follow_ups"] == [
-        {"prompt": "How would you spot it?", "answer": "Training error falls while validation error rises."}
+        {"prompt": "How would you spot it?", "answer": "Training error keeps falling while validation error starts rising, which shows the model is memorising noise."}
     ]
     assert report["answered_questions"] == 1
 

@@ -90,7 +90,7 @@ from app.schemas import (
     StyleVerdict,
     SuggestedSubtopics,
 )
-from app.services import prompts
+from app.services import adaptive_policy, prompts
 from app.services.delivery import delivery_record
 from app.services.grounding import quote_in, quote_problem
 from app.services.evidence import (
@@ -483,7 +483,7 @@ def _generate_question(
     """
     context, config = _confirmed_plan(session)
     question_type = question_type_for(config.question_type, sequence)
-    competency = competency_for(context.topic, context.subtopics, sequence)
+    competency = _competency(db, session, context, config, sequence)
     if context.input_model is InputModel.DOCUMENT:
         return _generate_document_question(db, llm, session, context, config, sequence, question_type, competency)
     request = prompts.question_request(
@@ -603,10 +603,28 @@ def _generate_document_question(
     return checked
 
 
-def _prepared(session: InterviewSession, sequence: int) -> CheckedQuestion | None:
-    """The question prepared in the background for `sequence`, if there is a usable one."""
+def _competency(
+    db: Session, session: InterviewSession, context: InterviewContext, config: InterviewConfig, sequence: int
+) -> str:
+    """The focus of planned question `sequence`: the plan's order in fixed mode, the least-covered
+    competency so far in adaptive mode (see adaptive_policy)."""
+    if not config.adaptive or sequence == 1:
+        return competency_for(context.topic, context.subtopics, sequence)
+    history = []
+    for question in _questions(db, session.id):
+        if question.follow_up == 0 and question.sequence < sequence:
+            replies = [given.text for _, given in _exchange(db, question)]
+            history.append((question.competency, adaptive_policy.evidence(replies)))
+    return adaptive_policy.next_competency(context.subtopics or [context.topic], history)
+
+
+def _prepared(session: InterviewSession, sequence: int, competency: str) -> CheckedQuestion | None:
+    """The question prepared in the background for `sequence`, if there is a usable one: written for
+    that question and, in adaptive mode, still about the competency chosen now."""
     prepared = session.prepared_json
     if not prepared or prepared.get("sequence") != sequence:
+        return None
+    if (prepared.get("question") or {}).get("competency") != competency:
         return None
     try:
         return CheckedQuestion(
@@ -637,7 +655,10 @@ def prepare_next_question(db: Session, session_id: uuid.UUID, llm: LLMClient) ->
         return
     planned = _planned_asked(db, session.id)
     sequence = planned + 1
-    if sequence > config.question_count or _prepared(session, sequence) is not None:
+    if sequence > config.question_count:
+        return
+    context, _ = _confirmed_plan(session)
+    if _prepared(session, sequence, _competency(db, session, context, config, sequence)) is not None:
         return
     try:
         checked = _generate_question(db, llm, session, sequence)  # Without a lock: it calls the model.
@@ -929,8 +950,9 @@ def _interviewer_turn(
 ) -> InterviewerTurn:
     """What the interviewer says after the latest reply. Never raises: on a model
     failure the interview just moves on without a reaction."""
-    context, _ = _confirmed_plan(session)
-    follow_ups_left = MAX_FOLLOW_UPS - latest.follow_up
+    context, config = _confirmed_plan(session)
+    # Fixed mode, the research baseline, never follows up.
+    follow_ups_left = MAX_FOLLOW_UPS - latest.follow_up if config.adaptive else 0
     exchange = [(asked.prompt, given.text) for asked, given in _exchange(db, latest)]
     request = prompts.interviewer_turn_request(
         topic=context.topic,
@@ -947,7 +969,9 @@ def _interviewer_turn(
     # The limits hold even if the model ignores them.
     if follow_ups_left <= 0:
         turn.follow_up = None
-    if next_focus is None:
+    elif not turn.follow_up and adaptive_policy.needs_rule_follow_up(exchange[-1][1]):
+        turn.follow_up = adaptive_policy.RULE_FOLLOW_UP
+    if turn.follow_up or next_focus is None:
         turn.transition = ""
     return turn
 
@@ -964,7 +988,7 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
     latest = _questions(db, session.id)[-1]
     planned = _planned_asked(db, session.id)
     last = planned >= config.question_count
-    next_focus = None if last else competency_for(context.topic, context.subtopics, planned + 1)
+    next_focus = None if last else _competency(db, session, context, config, planned + 1)
 
     turn = _interviewer_turn(db, llm, session, user, latest, next_focus)
     reaction = _spoken(turn.reaction)
@@ -1006,7 +1030,7 @@ def _advance(db: Session, user: User, session_id: uuid.UUID, llm: LLMClient) -> 
         return SubmitResult(session=session, next_question=None, reaction=replied_to.reaction)
 
     # Usually written in the background while the candidate answered; otherwise now.
-    checked = _prepared(session, planned + 1) or _generate_question(db, llm, session, sequence=planned + 1)
+    checked = _prepared(session, planned + 1, next_focus) or _generate_question(db, llm, session, sequence=planned + 1)
     rubric_id = _rubric_row(db, rubric_for(checked.generated.type)).id  # Before the lock: it may commit.
     session = get_session(db, user, session_id, lock=True)
     if session.state is SessionState.EVALUATING and _unanswered(db, session.id) is None:

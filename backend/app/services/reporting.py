@@ -188,6 +188,9 @@ def build_report(db: Session, session: InterviewSession, *, ended_early: bool) -
         "ended_early": ended_early,
         "duration_seconds": round((datetime.now(UTC) - started_at).total_seconds()),
         "configuration": config,
+        # Adaptive revisits weak areas and follows up; fixed keeps the plan's order (the research baseline).
+        "mode": "adaptive" if config.get("adaptive", True) else "fixed",
+        "competency_order": [question.competency for question in questions],
         "topic": context.get("topic"),
         "competencies": competencies,
         "coverage": {

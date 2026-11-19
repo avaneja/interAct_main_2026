@@ -390,6 +390,15 @@ Use a transparent rule-based policy instead of training a separate model:
 
 Keep **fixed-question mode** available internally for controlled research comparisons. Adaptive mode is a user-facing configuration option, not a third input model.
 
+**As built (M10):**
+
+- **Coverage:** answers are not scored during the call, so coverage uses evidence instead of scores. Each planned question counts 1 when the candidate's answer and follow-up replies give a normal amount of detail, 0.5 when they are thin (under 12 words), 0.25 for "I don't know" or a word or two, and 0 if unanswered.
+- **Next topic:** the next planned question goes to the least-covered competency. Ties go to the one asked least, then to plan order.
+- **Follow-ups:** the interviewer may follow up, at most twice per question. When a reply is thin but says something, and the model asked nothing, a rule adds "Could you say a bit more about that, ideally with a concrete example?"
+- **Fixed mode** (adaptive off) keeps the plan's order and never follows up.
+- **Both modes** use the same style rotation, difficulty, question budget and repeat check.
+- **The report** records the mode and the order of competencies, so runs can be compared.
+
 ---
 
 ## 6. Proposed API endpoints

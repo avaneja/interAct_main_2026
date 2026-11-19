@@ -416,7 +416,7 @@ def test_resubmitting_an_older_answer_cannot_skip_the_latest(db, user, llm):
     answer_current(db, user, session, llm)
     llm.queue_for("generate_question", LLMError("down"), LLMError("down"))
     with pytest.raises(svc.LLMUnavailable):
-        answer_current(db, user, session, llm, text="This is my second answer about the topic.")
+        answer_current(db, user, session, llm, text="This is my second answer about the topic, long enough to need no follow-up question.")
 
     svc.submit_answer(db, user, session.id, first.id, LONG_ANSWER, llm)
 

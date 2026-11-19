@@ -33,7 +33,8 @@ def run_interview(db, user, answers, *, llm=None, subtopics=("processes", "memor
     svc.set_context(db, user, session.id, InterviewContext.model_validate(
         {"input_model": "TOPIC", "topic": "Operating systems", "subtopics": list(subtopics)}))
     svc.set_config(db, user, session.id, InterviewConfig.model_validate(
-        {"question_type": "CONCEPTUAL", "difficulty": "intermediate", "question_count": 5}))
+        # Fixed mode: these tests are about the report, so questions follow the plan's order.
+        {"question_type": "CONCEPTUAL", "difficulty": "intermediate", "question_count": 5, "adaptive": False}))
     svc.confirm_plan(db, user, session.id)
     question = svc.start(db, user, session.id, llm)
     for text in answers:

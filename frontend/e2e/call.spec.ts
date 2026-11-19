@@ -83,7 +83,8 @@ test('a spoken call: listen, transcribe, review, send, and end early', async ({ 
   await page.getByRole('button', { name: 'Done answering' }).click()
   const review = page.getByLabel('Check your answer')
   await expect(review).toHaveValue(HEARD)
-  await review.fill(`${HEARD} space.`)
+  // A full answer, so adaptive mode moves on instead of asking for more.
+  await review.fill(`${HEARD} using sequence numbers and acknowledgements.`)
   await page.getByRole('button', { name: 'Send answer' }).click()
 
   // The next question is asked and listened to.
@@ -104,5 +105,5 @@ test('a spoken call: listen, transcribe, review, send, and end early', async ({ 
 
   const answered = page.locator('details').first()
   await answered.locator('summary').click()
-  await expect(answered.getByText(`${HEARD} space.`)).toBeVisible()
+  await expect(answered.getByText(`${HEARD} using sequence numbers and acknowledgements.`)).toBeVisible()
 })
