@@ -37,8 +37,26 @@ export function recognitionConstructor(): RecognitionConstructor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
+interface BrandedNavigator {
+  userAgentData?: { brands?: { brand: string }[] }
+}
+
+/**
+ * Whether this browser's speech recognition can actually work. Chromium-based apps that are
+ * not Google Chrome or Microsoft Edge (VS Code's built-in browser, Electron apps, Brave) offer
+ * the API but cannot reach a speech service, so every attempt ends in a "network" error.
+ * Browsers that do not report brands (Safari) are trusted.
+ */
+export function hasSpeechService(
+  nav: BrandedNavigator | undefined = typeof navigator === 'undefined' ? undefined : (navigator as BrandedNavigator),
+): boolean {
+  const brands = nav?.userAgentData?.brands
+  if (!brands?.length) return true
+  return brands.some(({ brand }) => brand === 'Google Chrome' || brand === 'Microsoft Edge')
+}
+
 export function canRecognizeSpeech(): boolean {
-  return recognitionConstructor() !== null
+  return recognitionConstructor() !== null && hasSpeechService()
 }
 
 /** Why recognition stopped for good; anything else is retried. */
@@ -59,7 +77,10 @@ export function describeRecognitionProblem(problem: RecognitionProblem): string 
     case 'no-microphone':
       return 'No working microphone was found.'
     case 'network':
-      return 'Speech recognition needs an internet connection, and it was lost.'
+      return (
+        'Speech recognition could not reach its speech service. This happens without an internet connection, ' +
+        'or in browsers other than Google Chrome or Microsoft Edge (such as an editor\'s built-in browser).'
+      )
     case 'unavailable':
       return 'Speech recognition is not available in this browser right now.'
   }
@@ -89,6 +110,10 @@ export interface Transcriber {
 // within RESTART_WINDOW_MS means something is wrong, so it gives up.
 const MAX_QUICK_RESTARTS = 5
 const RESTART_WINDOW_MS = 10_000
+// A "network" error can be a brief drop in the connection to the speech service, so listening
+// is retried this many times, after a short wait, before it stops.
+const NETWORK_RETRIES = 3
+const NETWORK_RETRY_MS = 1000
 
 export function createTranscriber(
   { onText, onProblem }: TranscriberEvents,
@@ -98,6 +123,8 @@ export function createTranscriber(
   let listening = false
   let current: RecognitionLike | null = null
   let restarts: number[] = []
+  let networkFailures = 0
+  let retryAfter = 0
 
   const begin = () => {
     if (!Recognition) {
@@ -119,9 +146,15 @@ export function createTranscriber(
         if (result.isFinal) sessionConfirmed = join(sessionConfirmed, result[0].transcript)
         else pending = join(pending, result[0].transcript)
       }
+      networkFailures = 0
       onText(join(confirmed, sessionConfirmed), pending)
     }
     recognition.onerror = (event) => {
+      if (event.error === 'network' && networkFailures < NETWORK_RETRIES) {
+        networkFailures++
+        retryAfter = NETWORK_RETRY_MS
+        return
+      }
       const problem = PROBLEMS[event.error]
       if (problem) {
         listening = false
@@ -138,6 +171,14 @@ export function createTranscriber(
       if (restarts.length > MAX_QUICK_RESTARTS) {
         listening = false
         onProblem('unavailable')
+        return
+      }
+      if (retryAfter) {
+        const wait = retryAfter
+        retryAfter = 0
+        window.setTimeout(() => {
+          if (listening && !current) begin()
+        }, wait)
         return
       }
       begin()
@@ -165,6 +206,8 @@ export function createTranscriber(
       confirmed = soFar.trim()
       listening = true
       restarts = []
+      networkFailures = 0
+      retryAfter = 0
       begin()
     },
     stop() {

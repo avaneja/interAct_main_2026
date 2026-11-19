@@ -5,8 +5,9 @@ import { inputClass } from '../lib/styles'
 import { createTranscriber, describeRecognitionProblem, type RecognitionProblem, type Transcriber } from './recognition'
 
 export const MAX_ANSWER = 10_000
-// After this long without new words, the answer is shown for review.
-export const SILENCE_MS = 5000
+// After this long without new words, the answer is shown for review. Long enough to pause and
+// think mid-answer, as people do in interviews; "Done answering" ends it at once.
+export const SILENCE_MS = 12_000
 
 const join = (...parts: string[]) =>
   parts
@@ -149,7 +150,7 @@ export default function AnswerPanel({
                   ? `Listen to ${interviewerName}. Your microphone turns on when ${interviewerName} finishes.`
                   : !microphoneOn
                     ? 'Your microphone is muted. Unmute it to answer.'
-                    : 'Listening… answer out loud.'}
+                    : 'Listening… answer out loud. Take your time; press Done answering when you have finished.'}
               </p>
             )}
           </div>

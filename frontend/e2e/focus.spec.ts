@@ -36,7 +36,8 @@ test('with consent, answers carry focus numbers only, and the report shows them'
   // The warm-up, then answer the first question after a few seconds of camera time.
   await page.getByLabel('Your answer').fill('I am a student.')
   await page.getByRole('button', { name: 'Send answer' }).click()
-  await expect(page.getByText('Question 1 of 5', { exact: true })).toBeVisible()
+  // The face model warms up now; headless Chrome draws in software, so this can hold the page for seconds.
+  await expect(page.getByText('Question 1 of 5', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('button', { name: 'Send answer' })).toBeVisible()
   // Wait until the face model is running, so the answer has camera time behind it.
   await expect(page.getByText('Eye contact tracking on')).toBeVisible({ timeout: 30_000 })

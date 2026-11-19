@@ -61,7 +61,7 @@ describe('answering by voice', () => {
     rerender({ canListen: true })
 
     expect(transcriber.start).toHaveBeenCalledWith('')
-    expect(screen.getByText('Listening… answer out loud.')).toBeInTheDocument()
+    expect(screen.getByText(/^Listening… answer out loud\./)).toBeInTheDocument()
   })
 
   it('shows the live transcript and passes it to the caption', () => {
@@ -136,7 +136,7 @@ describe('answering by voice', () => {
 
     act(() => transcriber.events?.onProblem('network'))
 
-    expect(screen.getByText(/needs an internet connection/)).toBeInTheDocument()
+    expect(screen.getByText(/could not reach its speech service/)).toBeInTheDocument()
     expect(screen.getByLabelText('Check your answer')).toHaveValue('A process is')
     expect(screen.queryByRole('button', { name: 'Keep talking' })).not.toBeInTheDocument()
   })

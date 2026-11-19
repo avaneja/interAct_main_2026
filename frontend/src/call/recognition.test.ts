@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTranscriber, type RecognitionLike } from './recognition'
+import { createTranscriber, hasSpeechService, type RecognitionLike } from './recognition'
 
 const sessions: FakeRecognition[] = []
 
@@ -105,7 +105,6 @@ describe('turning speech into text', () => {
   it.each([
     ['not-allowed', 'blocked'],
     ['audio-capture', 'no-microphone'],
-    ['network', 'network'],
     ['service-not-allowed', 'unavailable'],
   ])('gives up on a %s error', (error, problem) => {
     const { transcriber, onProblem } = setup()
@@ -146,5 +145,67 @@ describe('turning speech into text', () => {
     createTranscriber({ onText: vi.fn(), onProblem }, null).start()
 
     expect(onProblem).toHaveBeenCalledWith('unavailable')
+  })
+
+  it('retries a brief network drop after a short wait, keeping what was said', () => {
+    vi.useFakeTimers()
+    const { transcriber, onText, onProblem } = setup()
+    transcriber.start()
+    sessions[0].hear(['A process is', true])
+
+    sessions[0].onerror?.({ error: 'network' })
+    sessions[0].onend?.()
+    expect(sessions).toHaveLength(1)
+    vi.advanceTimersByTime(1000)
+
+    expect(sessions).toHaveLength(2)
+    sessions[1].hear(['a running program', true])
+    expect(onText).toHaveBeenLastCalledWith('A process is a running program', '')
+    expect(onProblem).not.toHaveBeenCalled()
+  })
+
+  it('stops after repeated network errors with nothing heard in between', () => {
+    vi.useFakeTimers()
+    const { transcriber, onProblem } = setup()
+    transcriber.start()
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const session = sessions[sessions.length - 1]
+      session.onerror?.({ error: 'network' })
+      session.onend?.()
+      vi.advanceTimersByTime(1000)
+    }
+
+    expect(onProblem).toHaveBeenCalledWith('network')
+    expect(sessions).toHaveLength(4)
+  })
+
+  it('does not restart after a network drop once listening was stopped', () => {
+    vi.useFakeTimers()
+    const { transcriber } = setup()
+    transcriber.start()
+
+    sessions[0].onerror?.({ error: 'network' })
+    sessions[0].onend?.()
+    transcriber.stop()
+    vi.advanceTimersByTime(1000)
+
+    expect(sessions).toHaveLength(1)
+  })
+})
+
+describe('knowing whether this browser can reach a speech service', () => {
+  it.each([
+    [[{ brand: 'Google Chrome' }, { brand: 'Chromium' }], true],
+    [[{ brand: 'Microsoft Edge' }, { brand: 'Chromium' }], true],
+    [[{ brand: 'Chromium' }, { brand: 'Not?A_Brand' }], false],
+    [[{ brand: 'Brave' }, { brand: 'Chromium' }], false],
+  ])('brands %j: %s', (brands, expected) => {
+    expect(hasSpeechService({ userAgentData: { brands } })).toBe(expected)
+  })
+
+  it('trusts browsers that do not report brands, such as Safari', () => {
+    expect(hasSpeechService({})).toBe(true)
+    expect(hasSpeechService(undefined)).toBe(true)
   })
 })

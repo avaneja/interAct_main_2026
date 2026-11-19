@@ -226,7 +226,12 @@ export default function PreCallPanel({
           />
           <span>
             Speak my answers
-            {!canSpeak && <span className="block text-xs">This browser cannot turn speech into text. Use Chrome to speak.</span>}
+            {!canSpeak && (
+              <span className="block text-xs">
+                Speaking needs Google Chrome or Microsoft Edge: this browser cannot turn speech into text. Open InterAct in
+                Chrome to speak, or type your answers.
+              </span>
+            )}
           </span>
         </label>
         <label className="flex gap-2 text-sm text-slate-700">

@@ -72,7 +72,7 @@ describe('the pre-call check', () => {
 
     expect(screen.getByRole('radio', { name: /Speak my answers/ })).toBeDisabled()
     expect(screen.getByRole('radio', { name: 'Type my answers' })).toBeChecked()
-    expect(screen.getByText(/Use Chrome to speak/)).toBeInTheDocument()
+    expect(screen.getByText(/Speaking needs Google Chrome or Microsoft Edge/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Join interview' })).toBeEnabled()
   })
 
