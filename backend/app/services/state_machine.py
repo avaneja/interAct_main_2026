@@ -34,6 +34,9 @@ TRANSITIONS: dict[tuple[S, Event], S] = {
     (S.IN_PROGRESS, Event.PAUSE): S.PAUSED,
     (S.PAUSED, Event.RESUME): S.IN_PROGRESS,
     (S.IN_PROGRESS, Event.FINISH): S.COMPLETED,
+    # Ending the call never has to wait: not while the interviewer is thinking, nor while paused.
+    (S.EVALUATING, Event.FINISH): S.COMPLETED,
+    (S.PAUSED, Event.FINISH): S.COMPLETED,
 }
 
 

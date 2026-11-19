@@ -359,6 +359,8 @@ stateDiagram-v2
     IN_PROGRESS --> PAUSED: Exit or disconnect
     PAUSED --> IN_PROGRESS: Resume
     IN_PROGRESS --> COMPLETED: Finish (scores every answer)
+    EVALUATING --> COMPLETED: End while the interviewer is thinking
+    PAUSED --> COMPLETED: End while paused
     COMPLETED --> [*]
 ```
 
@@ -369,7 +371,7 @@ stateDiagram-v2
 - Answer submission should be idempotent to avoid duplicate questions or scores.
 - Persist state before acknowledging completed operations.
 - On LLM errors, retry safely within limits; do not silently fabricate scores.
-- Answers are scored when the interview is finished, not after each answer, so the conversation never waits for scoring. `EVALUATING` means the interviewer is preparing its next step. After the last planned answer (and its follow-ups) the session is back `IN_PROGRESS` with no question waiting: the wrap-up, where the candidate can ask the interviewer questions. Finishing, then or earlier, scores every answer and writes the report; it is marked as ended early only if planned questions were left unanswered.
+- Answers are scored when the interview is finished, not after each answer, so the conversation never waits for scoring. `EVALUATING` means the interviewer is preparing its next step. After the last planned answer (and its follow-ups) the session is back `IN_PROGRESS` with no question waiting: the wrap-up, where the candidate can ask the interviewer questions. Finishing, then or earlier, scores every answer and writes the report; it is marked as ended early only if planned questions were left unanswered. The candidate can end the call at any time, including while the interviewer is preparing its reply (`EVALUATING`) or while paused; a reply still being prepared is then discarded.
 - If that step fails after retries, keep the saved answer and leave the session in `EVALUATING`. Resubmitting the same answer (or `retry`) continues without creating a duplicate; submitting different text for that question is rejected.
 - If scoring fails while finishing, the scores already made are kept and the interview stays open; finishing again scores only what is left.
 - Keep raw model output separate from validated structured data.

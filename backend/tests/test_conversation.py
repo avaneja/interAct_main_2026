@@ -283,3 +283,48 @@ def test_the_report_lists_follow_ups_under_their_question(db, user, llm):
         {"prompt": "How would you spot it?", "answer": "Training error falls while validation error rises."}
     ]
     assert report["answered_questions"] == 1
+
+
+# Ending the call at any moment
+
+
+class EndsDuringTheReply(FakeLLM):
+    """While the interviewer is preparing its reply, the candidate ends the call from another request."""
+
+    def __init__(self, engine, user, session_id):
+        super().__init__()
+        self.engine, self.user, self.session_id, self.ended = engine, user, session_id, None
+
+    def complete(self, request):
+        if request.purpose == "interviewer_turn" and self.ended is None:
+            from sqlalchemy.orm import Session
+
+            with Session(self.engine) as other:
+                user = other.get(User, self.user.id)
+                self.ended = svc.finish(other, user, self.session_id, FakeLLM()).state
+        return super().complete(request)
+
+
+def test_the_call_can_end_while_the_interviewer_is_thinking(db, db_engine, user, llm):
+    session, question = start(db, user, llm)
+    slow = EndsDuringTheReply(db_engine, user, session.id)
+
+    result = reply(question, db, user, session, slow)
+
+    assert slow.ended is SessionState.COMPLETED
+    # The reply that was being prepared is discarded: no new question appears after the end.
+    assert result.session.state is SessionState.COMPLETED and result.next_question is None
+    assert len(db.scalars(select(Question).where(Question.session_id == session.id)).all()) == 1
+    report = svc.get_report(db, user, session.id).summary_json
+    assert report["answered_questions"] == 1 and report["ended_early"] is True
+
+
+def test_the_call_can_end_while_paused(db, user, llm):
+    session, question = start(db, user, llm)
+    reply(question, db, user, session, llm)
+    svc.pause(db, user, session.id)
+
+    ended = svc.finish(db, user, session.id, llm)
+
+    assert ended.state is SessionState.COMPLETED
+    assert svc.get_report(db, user, session.id).summary_json["answered_questions"] == 1
