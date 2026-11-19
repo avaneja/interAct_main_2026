@@ -1,0 +1,40 @@
+# Render blueprint: one free web service built from the Dockerfile.
+# Values marked "sync: false" are secrets or addresses you enter in the Render dashboard;
+# they never go in this file. See docs/deployment.md for every step.
+services:
+  - type: web
+    name: interact
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL          # The Neon connection string.
+        sync: false
+      - key: PUBLIC_URL            # https://<your service>.onrender.com, no trailing slash.
+        sync: false
+      - key: SESSION_SECRET        # Random, made by Render; signs the sign-in cookie.
+        generateValue: true
+      - key: LLM_PROVIDER
+        value: openai_compatible
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL             # A model your Groq plan includes, from the Groq console.
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_TIMEOUT_SECONDS
+        value: "60"
+      # Rule-based style checks only: one model call fewer per question, within free limits.
+      - key: STYLE_CHECK
+        value: rules
+      - key: DEV_LOGIN
+        value: "false"
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false

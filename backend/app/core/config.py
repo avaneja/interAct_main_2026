@@ -39,8 +39,26 @@ class Settings(BaseSettings):
     # Uploaded documents (Model B). Kept outside anything served to the browser.
     upload_dir: Path = BACKEND_DIR / "uploads"
     max_upload_mb: int = Field(default=20, ge=1, le=100)
+    # The built frontend (frontend/dist). When set, the backend also serves the web app, so
+    # one service hosts everything on one address. Empty in development (Vite serves it).
+    frontend_dist: Path | None = None
     # Uploads are deleted this many days after upload, unless an unfinished interview uses them.
     document_retention_days: int = Field(default=30, ge=1, le=365)
+
+    @field_validator("frontend_dist", mode="before")
+    @classmethod
+    def no_frontend_when_empty(cls, value: object) -> object:
+        return None if value in ("", None) else value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_the_psycopg_driver(cls, value: object) -> object:
+        """Hosted databases such as Neon give postgres:// or postgresql:// URLs; SQLAlchemy needs the driver named."""
+        if isinstance(value, str):
+            for prefix in ("postgres://", "postgresql://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value[len(prefix):]
+        return value
 
     @field_validator("upload_dir", mode="before")
     @classmethod
@@ -72,6 +90,10 @@ class Settings(BaseSettings):
         secret = self.session_secret.get_secret_value()
         if self.app_env == "production" and (secret == DEV_SESSION_SECRET or len(secret) < 32):
             raise ValueError("SESSION_SECRET must be a random value of at least 32 characters in production")
+        if self.app_env == "production" and not self.public_url.startswith("https://"):
+            raise ValueError("PUBLIC_URL must be the https:// address of the deployed app in production")
+        if self.app_env == "production" and self.llm_provider == "fake":
+            raise ValueError("LLM_PROVIDER must be openai_compatible in production: the fake model only serves tests")
         return self
 
     # Development-only sign-in as a local test user, for working without OAuth

@@ -49,7 +49,9 @@ def test_the_cookie_is_http_only_lax_and_lasts_14_days():
 
 
 def test_the_cookie_is_https_only_in_production():
-    header = cookie_header(make_client(app_env="production", session_secret="s" * 40)).lower()
+    header = cookie_header(make_client(
+        app_env="production", session_secret="s" * 40, public_url="https://interact.example",
+        llm_provider="openai_compatible")).lower()
 
     assert "secure" in header
 

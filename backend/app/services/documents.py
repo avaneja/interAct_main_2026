@@ -207,8 +207,12 @@ def process(db: Session, document: Document, storage: FileStorage, llm: LLMClien
     document.status = DocumentStatus.PROCESSING
     document.summary_json = None
     db.commit()
+    path = storage.path(document.storage_key)
+    if not path.is_file():
+        # Hosts with temporary disks (such as a free Render service) lose files when they restart.
+        return _fail(db, document, "The uploaded file is no longer stored on the server. Upload it again.")
     try:
-        pages = extract(storage.path(document.storage_key))
+        pages = extract(path)
     except ExtractionError as error:
         return _fail(db, document, str(error))
     chunks = save_chunks(db, document, chunk_pages(pages))

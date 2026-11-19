@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import auth, documents, sessions
 from app.core.config import get_settings
+from app.core.frontend import serve_frontend
 from app.core.sessions import add_session_cookie
 from app.services import documents as document_service
 from app.services import interview
@@ -36,3 +37,8 @@ for error_type in ERROR_STATUS:
 @app.get("/api/v1/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Last, so every API route above takes precedence over the web app's catch-all.
+if get_settings().frontend_dist is not None:
+    serve_frontend(app, get_settings().frontend_dist)

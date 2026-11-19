@@ -614,7 +614,7 @@ interact/
 
 This repository is intended for a four-person academic capstone. Contributors should agree on data contracts and interface ownership before implementation. Use feature branches, pull-request reviews, automated tests, and versioned research configurations.
 
-**Current state:** M0–M9 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, the Model A clarification chat, and Model B document interviews with verified source references. Adaptive mode and deployment (M10) and the benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
+**Current state:** M0–M9 are implemented: the backend and interview engine, local LLM questions and scoring, Google/GitHub sign-in, the call-style interview with a 3D interviewer, the conversational interviewer, camera and focus feedback, the Model A clarification chat, and Model B document interviews with verified source references. M10 adaptive mode is implemented; deployment is prepared as one Docker service on Render with Neon and a hosted model (see [docs/deployment.md](docs/deployment.md)) and waits for the team's accounts. The benchmark results are pending. Replace this status section with verified setup commands, screenshots, demo URL, actual experiment results, and individual contributions as development progresses.
 
 
 

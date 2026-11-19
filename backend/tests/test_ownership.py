@@ -162,7 +162,8 @@ def test_development_sign_in_keeps_only_the_user_id_in_the_cookie(anonymous_clie
 
 
 @pytest.mark.parametrize("env", [
-    {"APP_ENV": "production", "SESSION_SECRET": "s" * 40, "DEV_LOGIN": "true"},
+    {"APP_ENV": "production", "SESSION_SECRET": "s" * 40, "DEV_LOGIN": "true",
+     "PUBLIC_URL": "https://interact.example", "LLM_PROVIDER": "openai_compatible"},
     {"APP_ENV": "test"},
     {"APP_ENV": "development", "DEV_LOGIN": "false"},
 ])
