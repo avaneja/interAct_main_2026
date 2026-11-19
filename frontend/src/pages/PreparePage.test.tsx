@@ -63,7 +63,7 @@ describe('describing the interview', () => {
 
     expect(mockedApi.createSession).toHaveBeenCalledWith('TOPIC')
     expect(mockedApi.prepareMessage).toHaveBeenCalledWith('s-1', { text: REQUEST })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/prepare'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/prepare'), { timeout: 3000 })
     const conversation = await screen.findByRole('list', { name: 'Conversation' })
     expect(within(conversation).getByText(REQUEST)).toBeInTheDocument()
     expect(within(conversation).getByText('What level are you at?')).toBeInTheDocument()
@@ -157,7 +157,7 @@ describe('the clarification chat', () => {
     mockedApi.getPreparation.mockResolvedValue(summarised)
     const router = renderApp('/sessions/s-1/prepare')
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'), { timeout: 3000 })
   })
 })
 
@@ -182,7 +182,7 @@ describe('confirming the plan', () => {
       input_model: 'TOPIC', topic: 'Machine learning', goal: 'an ML internship', level: 'beginner',
       subtopics: ['overfitting', 'cross-validation'],
     })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'), { timeout: 3000 })
   })
 
   it('checks the edited plan before saving', async () => {

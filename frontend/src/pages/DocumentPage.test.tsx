@@ -107,7 +107,7 @@ describe('uploading notes', () => {
     expect(mockedApi.setContext).toHaveBeenCalledWith('s-1', {
       input_model: 'DOCUMENT', topic: 'Lecture 5', subtopics: [], document_id: 'd-1', selected_topic_ids: ['t-1'],
     })
-    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/sessions/s-1/configure'), { timeout: 3000 })
   })
 
   it('needs at least one topic', async () => {

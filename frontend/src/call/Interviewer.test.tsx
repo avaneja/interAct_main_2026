@@ -1,5 +1,5 @@
 import type { SpeechAudio } from '@met4citizen/talkinghead'
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Interviewer, { type InterviewerHandle } from './Interviewer'
@@ -90,7 +90,8 @@ describe('the 3D interviewer', () => {
     render(<Interviewer interviewer={DEFAULT_INTERVIEWER} onStatusChange={onStatusChange} />)
 
     expect(await screen.findByText('The 3D interviewer could not load in this browser.')).toBeInTheDocument()
-    expect(onStatusChange).toHaveBeenLastCalledWith('error')
+    // The tile can render just before the status is reported.
+    await waitFor(() => expect(onStatusChange).toHaveBeenLastCalledWith('error'))
   })
 
   it('speaks with lip-sync, passes on each word, and resolves when the speech ends', async () => {
