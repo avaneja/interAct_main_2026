@@ -360,3 +360,16 @@ def test_the_report_places_a_verified_quote_on_its_own_page(db, user, tmp_path, 
     sources = svc.get_report(db, user, session.id).summary_json["questions"][0]["grounding"]["sources"]
 
     assert sources == [{"page": 2, "page_end": 2}]
+
+
+def test_the_document_budget_setting_limits_the_passages_sent(db, user, document, llm, monkeypatch):
+    from app.core.config import get_settings
+    from app.services.tokens import estimate_tokens
+
+    monkeypatch.setattr(get_settings(), "document_source_tokens", 700)
+    session = document_session(db, user, document)
+
+    svc.start(db, user, session.id, llm)
+
+    passages = next(r for r in llm.requests if r.purpose == "generate_document_question").hints["passages"]
+    assert sum(estimate_tokens(p["text"]) for p in passages) <= 800

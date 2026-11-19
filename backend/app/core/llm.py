@@ -43,6 +43,29 @@ class LLMClient(Protocol):
 
     def complete(self, request: LLMRequest) -> LLMResponse: ...
 
+    def model_for(self, purpose: str) -> str:
+        """The model that handles requests of this purpose."""
+        ...
+
+
+# Kinds of work that can each go to their own model (LLM_MODEL_<KIND>; see config.py).
+ROUTES: dict[str, frozenset[str]] = {
+    "conversation": frozenset({"interviewer_turn", "warm_up", "closing", "prepare_turn"}),
+    "questions": frozenset({"generate_question", "generate_document_question", "classify_style", "suggest_subtopics"}),
+    "grading": frozenset({"evaluate_answer", "evaluate_document_answer"}),
+    "documents": frozenset({"map_topics"}),
+}
+
+
+def model_routes(default: str, **by_kind: str) -> dict[str, str]:
+    """Purpose -> model for every purpose with its own model set; others use `default`."""
+    return {
+        purpose: model
+        for kind, purposes in ROUTES.items()
+        if (model := by_kind.get(kind, "")) and model != default
+        for purpose in purposes
+    }
+
 
 # One fake question per style, each written to pass that style's rule check.
 FAKE_QUESTIONS = {
@@ -77,6 +100,9 @@ class FakeLLM:
         self._queue: list[str | Exception] = list(replies)
         self._by_purpose: dict[str, list[str | Exception]] = {}
         self.requests: list[LLMRequest] = []
+
+    def model_for(self, purpose: str) -> str:
+        return self.model
 
     def queue(self, *replies: str | Exception) -> None:
         self._queue.extend(replies)
@@ -219,4 +245,12 @@ def get_llm() -> LLMClient:
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
         temperature=settings.llm_temperature,
+        reasoning_effort=settings.llm_reasoning_effort,
+        routes=model_routes(
+            settings.llm_model,
+            conversation=settings.llm_model_conversation,
+            questions=settings.llm_model_questions,
+            grading=settings.llm_model_grading,
+            documents=settings.llm_model_documents,
+        ),
     )

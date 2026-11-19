@@ -184,3 +184,66 @@ def test_get_llm_builds_the_adapter_from_settings(monkeypatch):
     assert isinstance(llm, OpenAICompatibleLLM)
     assert llm.base_url == "https://api.groq.com/openai/v1"
     assert llm.model == "llama-3.1-8b-instant"
+
+
+def test_asks_reasoning_models_for_low_reasoning_only_when_set():
+    with_effort = FakeServer(chat_reply("{}"))
+    make_llm(with_effort, reasoning_effort="low")[0].complete(REQUEST)
+    without = FakeServer(chat_reply("{}"))
+    make_llm(without)[0].complete(REQUEST)
+
+    assert json.loads(with_effort.requests[0].content)["reasoning_effort"] == "low"
+    assert "reasoning_effort" not in json.loads(without.requests[0].content)
+
+
+def test_the_reasoning_setting_reaches_the_adapter(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    get_settings.cache_clear()
+    try:
+        assert get_llm()._reasoning_effort == "low"
+    finally:
+        get_settings.cache_clear()
+
+
+def request_for(purpose):
+    return LLMRequest(purpose=purpose, system="s", user="u")
+
+
+def test_each_kind_of_work_can_go_to_its_own_model():
+    from app.core.llm import model_routes
+
+    routes = model_routes("gpt-oss-20b", conversation="qwen-27b", grading="gpt-oss-120b", questions="", documents="")
+    server = FakeServer(*(chat_reply("{}", model="whatever") for _ in range(4)))
+    llm, _ = make_llm(server, routes=routes)
+
+    for purpose in ("interviewer_turn", "evaluate_answer", "generate_question", "map_topics"):
+        llm.complete(request_for(purpose))
+
+    sent = [json.loads(r.content)["model"] for r in server.requests]
+    assert sent == ["qwen-27b", "gpt-oss-120b", "llama3.1:8b", "llama3.1:8b"]
+    assert llm.model_for("closing") == "qwen-27b" and llm.model_for("prepare_turn") == "qwen-27b"
+    assert llm.model_for("evaluate_document_answer") == "gpt-oss-120b"
+
+
+def test_every_prompt_purpose_belongs_to_exactly_one_kind_of_work():
+    from app.core.llm import ROUTES
+    from app.services.prompts import PROMPT_VERSIONS
+
+    kinds = [kind for purpose in PROMPT_VERSIONS for kind, purposes in ROUTES.items() if purpose in purposes]
+    assert len(kinds) == len(PROMPT_VERSIONS)
+
+
+def test_the_model_routes_come_from_the_settings(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setenv("LLM_MODEL_CONVERSATION", "qwen/qwen3.8-27b")
+    monkeypatch.setenv("LLM_MODEL_GRADING", "openai/gpt-oss-120b")
+    get_settings.cache_clear()
+    try:
+        llm = get_llm()
+        assert llm.model_for("warm_up") == "qwen/qwen3.8-27b"
+        assert llm.model_for("evaluate_answer") == "openai/gpt-oss-120b"
+        assert llm.model_for("map_topics") == "openai/gpt-oss-20b"
+    finally:
+        get_settings.cache_clear()

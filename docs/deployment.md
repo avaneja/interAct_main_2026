@@ -12,7 +12,7 @@ Checked in November 2026; plans change, so confirm in each dashboard.
 |---|---|---|
 | Render web service | Sleeps after 15 minutes without traffic, then takes about a minute to wake. 750 hours a month. The disk is wiped when it sleeps or restarts. | The first visit after a quiet spell is slow. Uploaded files are lost when it sleeps, but their text, topics and questions are already in the database, so interviews still work; only "process again" asks for a new upload. |
 | Neon | 1 GB of storage and 100 compute-hours a month per project. Sleeps after 5 minutes idle. | Plenty for a demo. The first query after a pause takes a moment; the app checks connections before use. |
-| Groq | Free models (for example gpt-oss and Qwen) reportedly allow about 30 requests a minute and 1,000 a day. The Llama 3.x models reportedly left the free plan in August 2026. | One 5-question interview makes roughly 30–40 model calls, so about 25 interviews a day. `STYLE_CHECK=rules` saves one call per question. |
+| Groq | Checked with a real key on 2026-11-19: `openai/gpt-oss-20b`, `openai/gpt-oss-120b` and `qwen/qwen3.8-27b` each allow 1,000 requests a day and **8,000 tokens a minute, per model**. The Llama models are no longer on the free plan. | The blueprint spreads the work over the three models (conversation on Qwen, questions and topic maps on gpt-oss-20b, grading on gpt-oss-120b), which triples the per-minute budget, and trims tokens (low reasoning, 1,200 tokens of notes per question, rule-based style checks). A full document interview then answers in about a second per step. |
 
 ## 1. Neon: the database
 
@@ -23,8 +23,8 @@ Checked in November 2026; plans change, so confirm in each dashboard.
 ## 2. Groq: the model
 
 1. Sign up at [console.groq.com](https://console.groq.com) and create an API key under **API Keys**. Copy it now: it's shown once.
-2. Open **Limits** (or **Models**) and choose a chat model your plan includes. Note its exact id, for example `openai/gpt-oss-20b`.
-3. The prompts were tuned on Llama 3.1 8B. After deploying, run one short interview and check the reactions and the report. If replies come back malformed, try another free model; the app retries once, then shows "try again" instead of making anything up.
+2. Open **Limits** and check that `openai/gpt-oss-20b`, `openai/gpt-oss-120b` and `qwen/qwen3.8-27b` are listed. `render.yaml` uses these three; if one has gone, change its `LLM_MODEL_*` value on Render to another listed chat model.
+3. These models were checked against InterAct's prompts on 2026-11-19 (valid replies, verified quotes, natural reactions). After deploying, still run one short interview and read the report.
 
 ## 3. Render: the service
 
@@ -36,7 +36,6 @@ Checked in November 2026; plans change, so confirm in each dashboard.
    |---|---|
    | `DATABASE_URL` | The Neon connection string from step 1 |
    | `PUBLIC_URL` | `https://interact.onrender.com`, the service address Render shows (if `interact` is taken it adds a suffix), with no trailing slash |
-   | `LLM_MODEL` | The Groq model id from step 2 |
    | `LLM_API_KEY` | The Groq API key |
    | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | From step 4 |
    | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | From step 4 |

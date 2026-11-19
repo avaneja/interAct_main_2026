@@ -110,8 +110,6 @@ from app.services.rubrics import RubricSpec, rubric_for
 from app.services.state_machine import Event, next_state
 
 LLM_ATTEMPTS = 2
-# Source text per document question, in tokens: a few passages, within the local model's 8K context.
-SOURCE_TOKENS = 2500
 STYLE_ATTEMPTS = 2
 MAX_FOLLOW_UPS = 2
 
@@ -365,7 +363,7 @@ def _ask_llm(
             response = llm.complete(request)
         except LLMError as error:
             _record_llm_call(
-                db, session_id=session_id, document_id=document_id, request=request, model=llm.model,
+                db, session_id=session_id, document_id=document_id, request=request, model=llm.model_for(request.purpose),
                 raw=f"[provider error] {error}", status=ValidationStatus.INVALID,
             )
             continue
@@ -520,7 +518,8 @@ def _passages(
     mapped_ids = set(topic.chunk_ids) if topic else set()
     mapped = [chunk for chunk in everything if str(chunk.id) in mapped_ids]
     query = f"{competency} {topic.summary or '' if topic else ''}"
-    return source_passages(query, mapped, everything, SOURCE_TOKENS)
+    # A few passages: within a local model's 8K context, and a hosted plan's tokens per minute (see settings).
+    return source_passages(query, mapped, everything, get_settings().document_source_tokens)
 
 
 def _pages(chunk: DocumentChunk) -> str:
@@ -884,7 +883,7 @@ def _evaluate(db: Session, llm: LLMClient, answer: Answer) -> None:
         insufficient_reason = _insufficient_reason(db, checked.evaluation, question, answer, candidate_text)
         if insufficient_reason and not checked.evaluation.insufficient_evidence:
             checked.evaluation = checked.evaluation.model_copy(update={"insufficient_evidence": True})
-        evaluator_version = f"{llm.model}|{rubric_label}|{request.prompt_version}"
+        evaluator_version = f"{llm.model_for(request.purpose)}|{rubric_label}|{request.prompt_version}"
 
     db.add(
         Evaluation(

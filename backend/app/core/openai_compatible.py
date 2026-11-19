@@ -13,7 +13,7 @@ has its own retry for invalid output.
 
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 import httpx2 as httpx
 
@@ -35,6 +35,8 @@ class OpenAICompatibleLLM:
         timeout_seconds: float = 60.0,
         max_retries: int = 2,
         temperature: float = 0.2,
+        reasoning_effort: str = "",
+        routes: Mapping[str, str] | None = None,
         transport: httpx.BaseTransport | None = None,
         sleep: Callable[[float], None] = time.sleep,
     ):
@@ -45,12 +47,19 @@ class OpenAICompatibleLLM:
         self._timeout_seconds = timeout_seconds
         self._max_retries = max_retries
         self._temperature = temperature
+        self._reasoning_effort = reasoning_effort
+        self._routes = dict(routes or {})
         self._transport = transport
         self._sleep = sleep
 
+    def model_for(self, purpose: str) -> str:
+        """The model for this kind of request: its own route if one is set, else the default."""
+        return self._routes.get(purpose, self.model)
+
     def complete(self, request: LLMRequest) -> LLMResponse:
+        model = self.model_for(request.purpose)
         body = {
-            "model": self.model,
+            "model": model,
             "messages": [
                 {"role": "system", "content": request.system},
                 {"role": "user", "content": request.user},
@@ -58,6 +67,8 @@ class OpenAICompatibleLLM:
             "temperature": self._temperature,
             "response_format": {"type": "json_object"},
         }
+        if self._reasoning_effort:
+            body["reasoning_effort"] = self._reasoning_effort
         headers = {"Authorization": f"Bearer {self._api_key}"} if self._api_key else {}
 
         with httpx.Client(base_url=self.base_url, timeout=self._timeout, transport=self._transport) as client:
@@ -83,18 +94,18 @@ class OpenAICompatibleLLM:
                 if response.status_code in RETRYABLE_STATUS and not last_attempt:
                     self._sleep(self._retry_after(response) or self._backoff(attempt))
                     continue
-                return self._parse(response)
+                return self._parse(response, model)
 
         raise AssertionError("unreachable")  # The loop always returns or raises.
 
-    def _parse(self, response: httpx.Response) -> LLMResponse:
+    def _parse(self, response: httpx.Response, model: str) -> LLMResponse:
         status = response.status_code
         if status in (401, 403):
             raise LLMError("The LLM provider rejected the API key (LLM_API_KEY).")
         if status == 404:
             raise LLMError(
-                f"The model '{self.model}' was not found at {self.base_url}. "
-                f"For Ollama, download it first with: ollama pull {self.model}"
+                f"The model '{model}' was not found at {self.base_url}. "
+                f"For Ollama, download it first with: ollama pull {model}"
             )
         if status in RETRYABLE_STATUS:
             raise LLMError(
@@ -111,7 +122,7 @@ class OpenAICompatibleLLM:
         if not isinstance(content, str) or not content.strip():
             raise LLMError("The LLM provider returned an empty reply.")
 
-        return LLMResponse(text=THINKING_BLOCK.sub("", content), model=data.get("model") or self.model)
+        return LLMResponse(text=THINKING_BLOCK.sub("", content), model=data.get("model") or model)
 
     def _backoff(self, attempt: int) -> float:
         return min(0.5 * 2**attempt, MAX_BACKOFF_SECONDS)

@@ -31,11 +31,23 @@ class Settings(BaseSettings):
     llm_provider: Literal["fake", "openai_compatible"] = "fake"
     llm_base_url: str = "http://localhost:11434/v1"
     llm_model: str = "interact-llama3.1:8b"
+    # Optional: a different model per kind of work (empty means LLM_MODEL). Hosted free plans
+    # limit tokens per minute per model, so spreading the work multiplies the budget.
+    llm_model_conversation: str = ""  # The interviewer's replies, warm-up, closing, clarification chat.
+    llm_model_questions: str = ""  # Writing questions, style checks, suggested subtopics.
+    llm_model_grading: str = ""  # Scoring answers at the end.
+    llm_model_documents: str = ""  # Topic maps of uploaded documents.
     llm_api_key: SecretStr = SecretStr("ollama")
     llm_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=5)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
     style_check: Literal["rules", "rules_and_llm"] = "rules_and_llm"
+    # Reasoning models (such as gpt-oss) think before answering, and those tokens count
+    # against a provider's tokens-per-minute limit. "low" keeps them small; empty sends nothing.
+    llm_reasoning_effort: Literal["", "low", "medium", "high"] = ""
+    # Document text per question, in tokens. Hosted free plans limit tokens per minute
+    # (Groq: 8,000), so a deployment can send less than a local model can take.
+    document_source_tokens: int = Field(default=2500, ge=300, le=20000)
     # Uploaded documents (Model B). Kept outside anything served to the browser.
     upload_dir: Path = BACKEND_DIR / "uploads"
     max_upload_mb: int = Field(default=20, ge=1, le=100)

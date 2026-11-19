@@ -329,3 +329,16 @@ def test_the_call_can_end_while_paused(db, user, llm):
 
     assert ended.state is SessionState.COMPLETED
     assert svc.get_report(db, user, session.id).summary_json["answered_questions"] == 1
+
+
+def test_a_grade_records_the_model_that_graded_it(db, user):
+    class Routed(FakeLLM):
+        def model_for(self, purpose):
+            return "grader-model" if purpose == "evaluate_answer" else self.model
+
+    llm = Routed()
+    session, question = start(db, user, llm)
+    reply(question, db, user, session, llm)
+    svc.finish(db, user, session.id, llm)
+
+    assert db.scalar(select(Evaluation)).evaluator_version.startswith("grader-model|")
